@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
-use opage::{generator::component::generate_components, utils::config::Config};
+use opage::{
+    generator::component::{generate_components, object_definition::types::ObjectDatabase},
+    utils::config::Config,
+};
 
 #[test]
 fn title_of_component_used() {
@@ -10,7 +13,7 @@ fn title_of_component_used() {
     let spec = oas3::from_path(spec_file_path).expect("Failed to read spec");
     let config = Config::new();
 
-    let object_database = generate_components(&spec, &config).unwrap();
+    let object_database = generate_components(&spec, &config, ObjectDatabase::new()).unwrap();
     assert_eq!(
         vec!["ValidName"],
         object_database.keys().collect::<Vec<&String>>()

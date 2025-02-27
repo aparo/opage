@@ -7,7 +7,9 @@ use std::{fs::File, io::Write, path::Path};
 use cli::cli;
 use generator::{
     cargo::generate_cargo_content,
-    component::{generate_components, write_object_database},
+    component::{
+        generate_components, object_definition::types::ObjectDatabase, write_object_database,
+    },
     paths::generate_paths,
 };
 use utils::{config::Config, log::Logger};
@@ -21,10 +23,10 @@ fn main() {
         .get_one::<String>("output-dir")
         .map(String::as_str)
         .expect("output-dir missing");
-    let spec_file_path = matches
-        .get_one::<String>("spec")
-        .map(String::as_str)
-        .expect("spec missing");
+    let spec_file_paths: Vec<&String> = matches
+        .get_many::<String>("spec")
+        .expect("spec missing")
+        .collect();
     let config_file_path = matches.get_one::<String>("config").map(String::as_str);
 
     log::set_logger(&LOGGER).expect("Failed to set logger");
@@ -32,10 +34,7 @@ fn main() {
 
     // Start generating
 
-    // 1. Read spec
-    let spec = oas3::from_path(Path::new(spec_file_path)).expect("Failed to read spec");
-
-    // 2. Load config (Get mapper for invalid language names, ignores...)
+    // 1. Load config (Get mapper for invalid language names, ignores...)
     let config = match config_file_path {
         Some(mapping_file) => {
             Config::from(Path::new(mapping_file)).expect("Failed to parse config")
@@ -43,12 +42,19 @@ fn main() {
         None => Config::new(),
     };
 
-    // 3. Generate Code
-    // 3.1 Components and database for type referencing
-    let mut object_database = &mut generate_components(&spec, &config).unwrap();
-    // 3.2 Generate paths requests
-    let generated_paths = generate_paths(output_dir, &spec, &mut object_database, &config)
-        .expect("Failed to generated paths");
+    // 2. Read spec
+    let mut object_database = ObjectDatabase::new();
+    let mut generated_paths = 0;
+    for spec_file_path in spec_file_paths {
+        let spec = oas3::from_path(Path::new(spec_file_path)).expect("Failed to read spec");
+        // 3. Generate Code
+        // 3.1 Components and database for type referencing
+        let odb = generate_components(&spec, &config, object_database).unwrap();
+        object_database = odb;
+        // 3.2 Generate paths requests
+        generated_paths += generate_paths(output_dir, &spec, &mut object_database, &config)
+            .expect("Failed to generated paths");
+    }
 
     // 3.3 Write all registered objects to individual type definitions
     write_object_database(output_dir, &mut object_database, &config).expect("Write objects failed");

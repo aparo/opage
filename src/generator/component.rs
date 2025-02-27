@@ -15,13 +15,15 @@ use crate::utils::config::Config;
 pub mod object_definition;
 pub mod type_definition;
 
-pub fn generate_components(spec: &Spec, config: &Config) -> Result<ObjectDatabase, String> {
+pub fn generate_components(
+    spec: &Spec,
+    config: &Config,
+    mut object_database: ObjectDatabase,
+) -> Result<ObjectDatabase, String> {
     let components = match spec.components {
         Some(ref components) => components,
-        None => return Ok(ObjectDatabase::new()),
+        None => return Ok(object_database),
     };
-
-    let mut object_database = ObjectDatabase::new();
 
     for (component_name, object_ref) in &components.schemas {
         if config.ignore.component_ignored(&component_name) {
