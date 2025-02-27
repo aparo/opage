@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::utils::config::Config;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModuleInfo {
     pub name: String,
@@ -62,18 +64,21 @@ impl EnumDefinition {
     pub fn to_string(&self, serializable: bool) -> String {
         let mut definition_str = String::new();
 
-        definition_str += match serializable {
-            true => "#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]\n",
-            _ => "",
+        if let Some(desc) = &self.description {
+            definition_str.push_str(format_description("", desc).as_str());
+        }
+        if serializable {
+            definition_str.push_str("#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]\n")
         };
-        definition_str += format!("pub enum {} {{\n\n", self.name).as_str();
+        definition_str.push_str(format!("pub enum {} {{\n", self.name).as_str());
 
         for (_, enum_value) in &self.values {
-            definition_str +=
-                format!("{}({}),\n", enum_value.name, enum_value.value_type.name).as_str()
+            definition_str.push_str(
+                format!("  {}({}),\n", enum_value.name, enum_value.value_type.name).as_str(),
+            );
         }
 
-        definition_str += "}";
+        definition_str.push_str("}");
         definition_str
     }
 }
@@ -100,35 +105,51 @@ impl StructDefinition {
         required_modules
     }
 
-    pub fn to_string(&self, serializable: bool) -> String {
+    pub fn to_string(&self, serializable: bool, config: &Config) -> String {
         let mut definition_str = String::new();
+        if let Some(def) = &self.description {
+            definition_str.push_str(format_description("", def).as_str());
+        }
 
-        definition_str += match serializable {
-            true => "#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]\n",
-            _ => "",
+        if serializable {
+            definition_str.push_str("#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]\n");
         };
-        definition_str += format!("pub struct {} {{\n", self.name).as_str();
+        definition_str.push_str(format!("pub struct {} {{\n", self.name).as_str());
 
         for (_, property) in &self.properties {
             if property.name != property.real_name && serializable {
-                definition_str +=
-                    format!("#[serde(alias = \"{}\")]\n", property.real_name).as_str();
+                definition_str
+                    .push_str(format!("#[serde(alias = \"{}\")]\n", property.real_name).as_str());
             }
 
-            match property.required {
-                true => {
-                    definition_str +=
-                        format!("  pub {}: {},\n", property.name, property.type_name).as_str()
+            if let Some(def) = &property.description {
+                definition_str.push_str(format_description("  ", def).as_str());
+            }
+
+            if property.required {
+                definition_str.push_str(
+                    format!("  pub {}: {},\n", property.name, property.type_name).as_str(),
+                );
+            } else {
+                if serializable {
+                    if config.serde_skip_null {
+                        definition_str.push_str(
+                            format!(
+                                "  #[serde(default, skip_serializing_if = \"Option::is_none\")]\n"
+                            )
+                            .as_str(),
+                        );
+                    } else {
+                        definition_str.push_str(format!("  #[serde(default)]\n").as_str());
+                    }
                 }
-                false => {
-                    definition_str +=
-                        format!("  pub {}: Option<{}>,\n", property.name, property.type_name)
-                            .as_str()
-                }
+                definition_str.push_str(
+                    format!("  pub {}: Option<{}>,\n", property.name, property.type_name).as_str(),
+                );
             }
         }
 
-        definition_str += "}";
+        definition_str.push('}');
         definition_str
     }
 }
@@ -137,4 +158,12 @@ impl StructDefinition {
 pub struct PrimitveDefinition {
     pub name: String,
     pub primitive_type: TypeDefinition,
+    pub description: Option<String>,
+}
+
+fn format_description(ident: &str, description: &str) -> String {
+    description
+        .lines()
+        .map(|line| format!("{}/// {}\n", ident, line))
+        .collect::<String>()
 }

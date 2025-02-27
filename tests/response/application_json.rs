@@ -3,7 +3,7 @@ use opage::{
         component::object_definition::types::ObjectDatabase,
         path::default_request::generate_operation,
     },
-    utils::{log::Logger, name_mapping::NameMapping},
+    utils::{config, log::Logger, name_mapping::NameMapping},
 };
 use reqwest::Method;
 use std::path::PathBuf;
@@ -23,6 +23,7 @@ fn empty_json() {
 
     let mut object_database = ObjectDatabase::new();
     let name_mapping = NameMapping::new();
+    let config = config::Config::default();
 
     generate_operation(
         &spec,
@@ -31,6 +32,7 @@ fn empty_json() {
         "/test",
         &path_spec.post.as_ref().unwrap(),
         &mut object_database,
+        &config,
     )
     .expect("Failed to generated path");
 }

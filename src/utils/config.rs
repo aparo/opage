@@ -1,6 +1,6 @@
-use std::{fs::File, path::Path};
-
 use serde::Deserialize;
+use serde_aux::prelude::*;
+use std::{fs::File, path::Path};
 
 use super::{name_mapping::NameMapping, spec_ignore::SpecIgnore};
 
@@ -24,7 +24,15 @@ pub struct Config {
     pub project_metadata: ProjectMetadata,
     pub name_mapping: NameMapping,
     pub ignore: SpecIgnore,
+    #[serde(default = "bool_true")]
+    pub serde_skip_null: bool,
+    #[serde(default = "bool_true")]
+    pub serde_skip_empty_vec: bool,
+    #[serde(default = "bool_true")]
+    pub serde_skip_empty_map: bool,
+    #[serde(default = "bool_true")]
     pub serde_serialize: bool,
+    #[serde(default = "bool_true")]
     pub serde_deserialize: bool,
 }
 
@@ -34,6 +42,9 @@ impl Default for Config {
             project_metadata: ProjectMetadata::new(),
             name_mapping: NameMapping::new(),
             ignore: SpecIgnore::new(),
+            serde_skip_empty_map: true,
+            serde_skip_empty_vec: true,
+            serde_skip_null: true,
             serde_serialize: true,
             serde_deserialize: true,
         }

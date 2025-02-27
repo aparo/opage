@@ -2,3 +2,4 @@
 target/
 output/
 name_mapping.json
+output_client/

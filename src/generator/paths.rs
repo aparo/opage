@@ -117,6 +117,7 @@ fn write_operation_to_file(
             &path,
             &operation,
             object_database,
+            config,
         ) {
             Ok(request_code) => request_code,
             Err(err) => return Err(format!("Failed to generated websocket code {}", err)),
@@ -128,6 +129,7 @@ fn write_operation_to_file(
             &path,
             &operation,
             object_database,
+            config,
         ) {
             Ok(request_code) => request_code,
             Err(err) => {

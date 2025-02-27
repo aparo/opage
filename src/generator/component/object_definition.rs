@@ -111,7 +111,8 @@ pub fn generate_object(
             ) {
                 Ok(type_definition) => Ok(ObjectDefinition::Primitive(PrimitveDefinition {
                     name: name.to_owned(),
-                    primitive_type: type_definition,
+                    primitive_type: type_definition.clone(),
+                    description: type_definition.description.clone(),
                 })),
                 Err(err) => Err(err),
             },

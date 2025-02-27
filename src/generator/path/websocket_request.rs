@@ -63,6 +63,7 @@ pub fn generate_operation(
     path: &str,
     operation: &Operation,
     object_database: &mut ObjectDatabase,
+    config: &crate::utils::config::Config,
 ) -> Result<String, String> {
     let operation_definition_path: Vec<String> = vec![path.to_owned()];
 
@@ -298,7 +299,7 @@ pub fn generate_operation(
             name_mapping.name_to_property_name(&operation_definition_path, &query_struct.name),
             query_struct.name
         ));
-        query_struct_source_code += &query_struct.to_string(false);
+        query_struct_source_code += &query_struct.to_string(false, config);
         query_struct_source_code += "\n\n";
     }
 
@@ -376,7 +377,7 @@ pub fn generate_operation(
     );
     request_source_code += "\n";
     if !path_struct_definition.properties.is_empty() {
-        request_source_code += &path_struct_definition.to_string(false);
+        request_source_code += &path_struct_definition.to_string(false, config);
         request_source_code += "\n";
     }
 

@@ -14,7 +14,7 @@ use crate::{
         },
         type_definition::get_type_from_schema,
     },
-    utils::name_mapping::NameMapping,
+    utils::{config::Config, name_mapping::NameMapping},
 };
 
 use super::utils::{
@@ -29,6 +29,7 @@ pub fn generate_operation(
     path: &str,
     operation: &Operation,
     object_database: &mut ObjectDatabase,
+    config: &Config,
 ) -> Result<String, String> {
     trace!("Generating {} {}", method.as_str(), path);
     let operation_definition_path: Vec<String> = vec![path.to_owned()];
@@ -305,12 +306,14 @@ pub fn generate_operation(
     request_source_code += &response_enum_source_code;
     request_source_code += "\n";
     if !path_parameter_code.parameters_struct.properties.is_empty() {
-        request_source_code += &path_parameter_code.parameters_struct.to_string(false);
+        request_source_code += &path_parameter_code
+            .parameters_struct
+            .to_string(false, config);
         request_source_code += "\n";
     }
 
     if query_parameter_code.query_struct.properties.len() > 0 {
-        request_source_code += &query_parameter_code.query_struct.to_string(false);
+        request_source_code += &query_parameter_code.query_struct.to_string(false, config);
     }
 
     request_source_code += "\n";

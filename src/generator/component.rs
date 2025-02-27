@@ -10,7 +10,7 @@ use object_definition::{
     types::{ObjectDatabase, ObjectDefinition},
 };
 
-use crate::utils::{config::Config, name_mapping::NameMapping};
+use crate::utils::config::Config;
 
 pub mod object_definition;
 pub mod type_definition;
@@ -104,8 +104,9 @@ pub fn generate_components(spec: &Spec, config: &Config) -> Result<ObjectDatabas
 pub fn write_object_database(
     output_dir: &str,
     object_database: &ObjectDatabase,
-    name_mapping: &NameMapping,
+    config: &Config,
 ) -> Result<(), String> {
+    let name_mapping = &config.name_mapping;
     fs::create_dir_all(format!("{}/src/objects/", output_dir))
         .expect("Creating objects dir failed");
 
@@ -135,7 +136,7 @@ pub fn write_object_database(
                 object_file.write("\n".as_bytes()).unwrap();
 
                 object_file
-                    .write(struct_definition.to_string(true).as_bytes())
+                    .write(struct_definition.to_string(true, config).as_bytes())
                     .unwrap();
             }
             ObjectDefinition::Enum(enum_definition) => {
@@ -153,7 +154,8 @@ pub fn write_object_database(
                     .write(
                         modules_to_string(
                             &primitive_definition
-                                .primitive_type.module
+                                .primitive_type
+                                .module
                                 .as_ref()
                                 .map_or(vec![], |module| vec![module]),
                         )
@@ -162,8 +164,20 @@ pub fn write_object_database(
                     .expect("Failed to write imports");
                 object_file.write("\n".as_bytes()).unwrap();
 
+                if let Some(desc) = &primitive_definition.description {
+                    object_file
+                        .write(format!("/// {}\n", desc).as_bytes())
+                        .unwrap();
+                }
+
                 object_file
-                    .write(format!("pub type {} = {};\n", primitive_definition.name, primitive_definition.primitive_type.name).as_bytes())
+                    .write(
+                        format!(
+                            "pub type {} = {};\n",
+                            primitive_definition.name, primitive_definition.primitive_type.name
+                        )
+                        .as_bytes(),
+                    )
                     .unwrap();
             }
         }

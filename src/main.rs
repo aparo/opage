@@ -51,8 +51,7 @@ fn main() {
         .expect("Failed to generated paths");
 
     // 3.3 Write all registered objects to individual type definitions
-    write_object_database(output_dir, &mut object_database, &config.name_mapping)
-        .expect("Write objects failed");
+    write_object_database(output_dir, &mut object_database, &config).expect("Write objects failed");
     // 4. Project setup
     let mut lib_file =
         File::create(format!("{}/src/lib.rs", output_dir)).expect("Failed to create lib.rs");
