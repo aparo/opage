@@ -118,6 +118,7 @@ pub fn get_type_from_any_type(
             ),
             name: object_name.clone(),
         }),
+        description: object_schema.description.clone(),
     })
 }
 
@@ -152,18 +153,22 @@ pub fn get_type_from_schema_type(
         oas3::spec::SchemaType::Boolean => Ok(TypeDefinition {
             name: "bool".to_owned(),
             module: None,
+            description: object_schema.description.clone(),
         }),
         oas3::spec::SchemaType::String => Ok(TypeDefinition {
             name: "String".to_owned(),
             module: None,
+            description: object_schema.description.clone(),
         }),
         oas3::spec::SchemaType::Number => Ok(TypeDefinition {
             name: "f64".to_owned(),
             module: None,
+            description: object_schema.description.clone(),
         }),
         oas3::spec::SchemaType::Integer => Ok(TypeDefinition {
             name: "i32".to_owned(),
             module: None,
+            description: object_schema.description.clone(),
         }),
         oas3::spec::SchemaType::Array => {
             let item_object_ref = match object_schema.items {
@@ -171,7 +176,7 @@ pub fn get_type_from_schema_type(
                 None => return Err(format!("Array has no item type")),
             };
 
-            let (item_type_definition_path, item_type_name) = match get_object_or_ref_struct_name(
+            let (item_type_definition_path, item_type_name, _) = match get_object_or_ref_struct_name(
                 spec,
                 &definition_path,
                 name_mapping,
@@ -236,6 +241,7 @@ pub fn get_type_from_schema_type(
                     ),
                     name: object_name.clone(),
                 }),
+                description: object_schema.description.clone(),
             })
         }
         _ => Err(format!("Type {:?} not supported", single_type)),

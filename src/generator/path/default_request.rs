@@ -649,6 +649,7 @@ fn generate_path_parameter_code(
             real_name: path_component,
             required: true,
             type_name: "&str".to_owned(),
+            description: None,
         })
         .collect::<Vec<PropertyDefinition>>();
     let path_struct_definition = StructDefinition {
@@ -666,10 +667,12 @@ fn generate_path_parameter_code(
                         real_name: path_component.real_name.clone(),
                         required: path_component.required,
                         type_name: "String".to_owned(),
+                        description: path_component.description.clone(),
                     },
                 )
             })
             .collect::<HashMap<String, PropertyDefinition>>(),
+        description: None,
     };
 
     let path_format_string = path
@@ -714,6 +717,7 @@ fn generate_query_parameter_code(
         properties: HashMap::new(),
         used_modules: vec![],
         local_objects: HashMap::new(),
+        description: None,
     };
 
     let query_struct_variable_name =
@@ -766,6 +770,7 @@ fn generate_query_parameter_code(
                         None => false,
                     },
                     type_name: parameter_type.name,
+                    description: parameter_type.description.clone(),
                 },
             ),
             Err(err) => return Err(err),

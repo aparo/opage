@@ -10,6 +10,7 @@ pub struct ModuleInfo {
 pub struct TypeDefinition {
     pub name: String,
     pub module: Option<ModuleInfo>,
+    pub description: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -19,6 +20,7 @@ pub struct PropertyDefinition {
     pub type_name: String,
     pub module: Option<ModuleInfo>,
     pub required: bool,
+    pub description: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -39,6 +41,7 @@ pub struct EnumDefinition {
     pub name: String,
     pub used_modules: Vec<ModuleInfo>,
     pub values: HashMap<String, EnumValue>,
+    pub description: Option<String>,
 }
 
 pub type ObjectDatabase = HashMap<String, ObjectDefinition>;
@@ -81,6 +84,7 @@ pub struct StructDefinition {
     pub name: String,
     pub properties: HashMap<String, PropertyDefinition>,
     pub local_objects: HashMap<String, Box<ObjectDefinition>>,
+    pub description: Option<String>,
 }
 
 impl StructDefinition {
@@ -103,7 +107,7 @@ impl StructDefinition {
             true => "#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]\n",
             _ => "",
         };
-        definition_str += format!("pub struct {} {{\n\n", self.name).as_str();
+        definition_str += format!("pub struct {} {{\n", self.name).as_str();
 
         for (_, property) in &self.properties {
             if property.name != property.real_name && serializable {
@@ -114,11 +118,12 @@ impl StructDefinition {
             match property.required {
                 true => {
                     definition_str +=
-                        format!("pub {}: {},\n", property.name, property.type_name).as_str()
+                        format!("  pub {}: {},\n", property.name, property.type_name).as_str()
                 }
                 false => {
                     definition_str +=
-                        format!("pub {}: Option<{}>,\n", property.name, property.type_name).as_str()
+                        format!("  pub {}: Option<{}>,\n", property.name, property.type_name)
+                            .as_str()
                 }
             }
         }
@@ -131,5 +136,5 @@ impl StructDefinition {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PrimitveDefinition {
     pub name: String,
-    pub primitive_type: TypeDefinition
+    pub primitive_type: TypeDefinition,
 }

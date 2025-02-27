@@ -111,6 +111,7 @@ pub fn generate_operation(
         TransferMediaType::TextPlain => &TypeDefinition {
             name: oas3_type_to_string(&oas3::spec::SchemaType::String),
             module: None,
+            description: None,
         },
     };
 
@@ -132,6 +133,7 @@ pub fn generate_operation(
             real_name: path_component,
             required: true,
             type_name: "&str".to_owned(),
+            description: None,
         })
         .collect::<Vec<PropertyDefinition>>();
     let path_struct_definition = StructDefinition {
@@ -148,11 +150,13 @@ pub fn generate_operation(
                         real_name: path_component.real_name.clone(),
                         required: path_component.required,
                         type_name: "String".to_owned(),
+                        description: path_component.description.clone(),
                     },
                 )
             })
             .collect::<HashMap<String, PropertyDefinition>>(),
         local_objects: HashMap::new(),
+        description: operation.description.clone(),
     };
 
     let path_format_string = path
@@ -219,6 +223,7 @@ pub fn generate_operation(
         properties: HashMap::new(),
         used_modules: vec![],
         local_objects: HashMap::new(),
+        description: operation.description.clone(),
     };
     let mut query_operation_definition_path = operation_definition_path.clone();
     query_operation_definition_path.push(query_struct.name.clone());
@@ -279,6 +284,7 @@ pub fn generate_operation(
                         None => false,
                     },
                     type_name: parameter_type.name,
+                    description: parameter_type.description.clone(),
                 },
             ),
             Err(err) => return Err(err),

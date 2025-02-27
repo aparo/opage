@@ -6,7 +6,8 @@ use oas3::{
     Spec,
 };
 use types::{
-    EnumDefinition, EnumValue, ModuleInfo, ObjectDefinition, PrimitveDefinition, PropertyDefinition, StructDefinition
+    EnumDefinition, EnumValue, ModuleInfo, ObjectDefinition, PrimitveDefinition,
+    PropertyDefinition, StructDefinition,
 };
 
 use crate::utils::name_mapping::NameMapping;
@@ -87,7 +88,7 @@ pub fn generate_object(
 
     let schema_type = match object_schema.schema_type {
         Some(ref schema_type) => schema_type,
-        None =>  &SchemaTypeSet::Single(oas3::spec::SchemaType::String)
+        None => &SchemaTypeSet::Single(oas3::spec::SchemaType::String),
     };
 
     match schema_type {
@@ -108,7 +109,10 @@ pub fn generate_object(
                 Some(name),
                 name_mapping,
             ) {
-                Ok(type_definition) => Ok(ObjectDefinition::Primitive(PrimitveDefinition { name: name.to_owned(), primitive_type: type_definition })),
+                Ok(type_definition) => Ok(ObjectDefinition::Primitive(PrimitveDefinition {
+                    name: name.to_owned(),
+                    primitive_type: type_definition,
+                })),
                 Err(err) => Err(err),
             },
         },
@@ -133,7 +137,8 @@ pub fn get_object_or_ref_struct_name(
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
     object_or_reference: &ObjectOrReference<ObjectSchema>,
-) -> Result<(Vec<String>, String), String> {
+) -> Result<(Vec<String>, String, Option<String>), String> {
+    // last parameter is the description
     let object_schema = match object_or_reference {
         ObjectOrReference::Ref { ref_path } => {
             let ref_definition_path = match get_base_path_to_ref(ref_path) {
@@ -147,6 +152,7 @@ pub fn get_object_or_ref_struct_name(
                         return Ok((
                             ref_definition_path.clone(),
                             name_mapping.name_to_struct_name(&ref_definition_path, ref_title),
+                            object_schema.description.clone(),
                         ));
                     }
                     None => {
@@ -163,6 +169,7 @@ pub fn get_object_or_ref_struct_name(
                         return Ok((
                             ref_definition_path.clone(),
                             name_mapping.name_to_struct_name(&ref_definition_path, path_name),
+                            object_schema.description.clone(),
                         ));
                     }
                 },
@@ -177,6 +184,7 @@ pub fn get_object_or_ref_struct_name(
         return Ok((
             definition_path.clone(),
             name_mapping.name_to_struct_name(definition_path, &title),
+            object_schema.description.clone(),
         ));
     }
 
@@ -193,6 +201,7 @@ pub fn get_object_or_ref_struct_name(
         return Ok((
             definition_path.clone(),
             name_mapping.name_to_struct_name(definition_path, &type_name),
+            object_schema.description.clone(),
         ));
     }
 
@@ -236,6 +245,7 @@ pub fn generate_enum_from_any(
                 path: "serde".to_owned(),
             },
         ],
+        description: object_schema.description.clone(),
     };
     definition_path.push(enum_definition.name.clone());
 
@@ -269,7 +279,7 @@ pub fn generate_enum_from_any(
             name_mapping,
             any_object_ref,
         ) {
-            Ok((_, object_type_struct_name)) => name_mapping.name_to_struct_name(
+            Ok((_, object_type_struct_name, _)) => name_mapping.name_to_struct_name(
                 &any_object_definition_path,
                 &format!("{}Value", object_type_struct_name),
             ),
@@ -329,6 +339,7 @@ pub fn generate_enum_from_one_of(
                 path: "serde".to_owned(),
             },
         ],
+        description: object_schema.description.clone(),
     };
     definition_path.push(enum_definition.name.clone());
 
@@ -362,7 +373,7 @@ pub fn generate_enum_from_one_of(
             name_mapping,
             one_of_object_ref,
         ) {
-            Ok((_, object_type_struct_name)) => name_mapping.name_to_struct_name(
+            Ok((_, object_type_struct_name, _)) => name_mapping.name_to_struct_name(
                 &one_of_object_definition_path,
                 &format!("{}Value", object_type_struct_name),
             ),
@@ -398,7 +409,6 @@ pub fn generate_enum_from_one_of(
     Ok(ObjectDefinition::Enum(enum_definition))
 }
 
-
 pub fn generate_struct(
     spec: &Spec,
     object_database: &mut ObjectDatabase,
@@ -424,6 +434,7 @@ pub fn generate_struct(
             },
         ],
         local_objects: HashMap::new(),
+        description: object_schema.description.clone(),
     };
     definition_path.push(struct_definition.name.clone());
 
@@ -477,7 +488,7 @@ fn get_or_create_property(
         }
     };
 
-    let (property_type_definition_path, property_type_name) =
+    let (property_type_definition_path, property_type_name, description) =
         match get_object_or_ref_struct_name(spec, &definition_path, name_mapping, property_ref) {
             Ok(type_naming_data) => type_naming_data,
             Err(err) => {
@@ -502,6 +513,7 @@ fn get_or_create_property(
             name: name_mapping.name_to_property_name(&definition_path, property_name),
             real_name: property_name.clone(),
             required: required,
+            description,
         }),
         Err(err) => Err(err),
     }
@@ -541,6 +553,7 @@ pub fn get_or_create_object(
             name: struct_name.clone(),
             properties: HashMap::new(),
             local_objects: HashMap::new(),
+            description: property_ref.description.clone(),
         }),
     );
 

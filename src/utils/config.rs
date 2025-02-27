@@ -24,6 +24,20 @@ pub struct Config {
     pub project_metadata: ProjectMetadata,
     pub name_mapping: NameMapping,
     pub ignore: SpecIgnore,
+    pub serde_serialize: bool,
+    pub serde_deserialize: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            project_metadata: ProjectMetadata::new(),
+            name_mapping: NameMapping::new(),
+            ignore: SpecIgnore::new(),
+            serde_serialize: true,
+            serde_deserialize: true,
+        }
+    }
 }
 
 impl Config {
@@ -39,10 +53,6 @@ impl Config {
     }
 
     pub fn new() -> Self {
-        Config {
-            project_metadata: ProjectMetadata::new(),
-            name_mapping: NameMapping::new(),
-            ignore: SpecIgnore::new(),
-        }
+        Config::default()
     }
 }
