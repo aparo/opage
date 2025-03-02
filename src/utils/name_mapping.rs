@@ -1,8 +1,8 @@
 use convert_case::Casing;
-use log::trace;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use std::collections::HashMap;
+use tracing::trace;
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 pub struct NameMapping {

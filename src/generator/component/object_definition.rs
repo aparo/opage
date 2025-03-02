@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use log::{error, info, trace};
 use oas3::{
     spec::{ObjectOrReference, ObjectSchema, SchemaTypeSet},
     Spec,
 };
+use tracing::{error, info, trace};
 use types::{
     EnumDefinition, EnumValue, ModuleInfo, ObjectDefinition, PrimitiveDefinition,
     PropertyDefinition, StructDefinition,

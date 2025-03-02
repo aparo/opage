@@ -14,12 +14,12 @@ use crate::{
     },
     utils::name_mapping::NameMapping,
 };
-use log::error;
 use oas3::{
     spec::{FromRef, ObjectOrReference, ObjectSchema, Operation, ParameterIn},
     Spec,
 };
 use std::collections::HashMap;
+use tracing::error;
 
 fn read_websocket_stream_to_string(struct_name: &str, response_type_name: &str) -> String {
     return format!(

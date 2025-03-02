@@ -1,8 +1,8 @@
-use log::trace;
 use oas3::{
     spec::{ObjectSchema, SchemaTypeSet},
     Spec,
 };
+use tracing::trace;
 
 use crate::utils::name_mapping::NameMapping;
 

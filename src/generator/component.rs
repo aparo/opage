@@ -1,14 +1,15 @@
 use std::{
     fs::{self, File},
     io::Write,
+    path::PathBuf,
 };
 
-use log::{error, info, trace};
 use oas3::Spec;
 use object_definition::{
     generate_object, get_components_base_path, get_object_name, modules_to_string,
     types::{ObjectDatabase, ObjectDefinition},
 };
+use tracing::{error, info, trace};
 
 use crate::utils::config::Config;
 
@@ -104,31 +105,33 @@ pub fn generate_components(
 }
 
 pub fn write_object_database(
-    output_dir: &str,
+    output_dir: &PathBuf,
     object_database: &ObjectDatabase,
     config: &Config,
 ) -> Result<(), String> {
     let name_mapping = &config.name_mapping;
-    fs::create_dir_all(format!("{}/src/objects/", output_dir))
-        .expect("Creating objects dir failed");
+    let target_dir = output_dir.join("src").join("objects");
+
+    fs::create_dir_all(&target_dir).expect("Creating objects dir failed");
 
     for (_, object_definition) in object_database {
         let object_name = get_object_name(object_definition);
 
         let module_name = name_mapping.name_to_module_name(object_name);
 
-        let mut object_file =
-            match File::create(format!("{}/src/objects/{}.rs", output_dir, module_name)) {
-                Ok(file) => file,
-                Err(err) => {
-                    error!(
-                        "Unable to create file {}.rs {}",
-                        module_name,
-                        err.to_string()
-                    );
-                    continue;
-                }
-            };
+        let target_file = target_dir.join(format!("{}.rs", module_name));
+
+        let mut object_file = match File::create(target_file) {
+            Ok(file) => file,
+            Err(err) => {
+                error!(
+                    "Unable to create file {}.rs {}",
+                    module_name,
+                    err.to_string()
+                );
+                continue;
+            }
+        };
 
         match object_definition {
             ObjectDefinition::Struct(struct_definition) => {
@@ -185,12 +188,14 @@ pub fn write_object_database(
         }
     }
 
-    let mut object_mod_file = match File::create(format!("{}/src/objects/mod.rs", output_dir)) {
+    let target_mod = target_dir.join("mod.rs");
+
+    let mut object_mod_file = match File::create(&target_mod) {
         Ok(file) => file,
         Err(err) => {
             return Err(format!(
                 "Unable to create file {} {}",
-                format!("{}/src/objects/mod.rs", output_dir),
+                target_mod.as_os_str().to_string_lossy(),
                 err.to_string()
             ))
         }

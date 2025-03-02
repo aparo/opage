@@ -1,11 +1,11 @@
 use std::collections::{BTreeMap, HashMap};
 
-use log::{error, trace};
 use oas3::{
     spec::{MediaType, ObjectOrReference, ObjectSchema, RequestBody, Response},
     Spec,
 };
 use reqwest::StatusCode;
+use tracing::{error, trace};
 
 use crate::{
     generator::component::{

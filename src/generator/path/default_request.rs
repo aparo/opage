@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use log::trace;
 use oas3::{
     spec::{Operation, ParameterIn},
     Spec,
 };
+use tracing::trace;
 
 use crate::{
     generator::component::{

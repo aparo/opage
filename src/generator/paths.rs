@@ -1,10 +1,11 @@
 use std::{
     fs::{self, File},
     io::Write,
+    path::PathBuf,
 };
 
-use log::{error, info};
 use oas3::{spec::Operation, Spec};
+use tracing::{error, info};
 
 use crate::utils::config::Config;
 
@@ -14,7 +15,7 @@ use super::{
 };
 
 pub fn generate_paths(
-    output_path: &str,
+    output_path: &PathBuf,
     spec: &Spec,
     object_database: &mut ObjectDatabase,
     config: &Config,
@@ -25,10 +26,13 @@ pub fn generate_paths(
         Some(ref paths) => paths,
         None => return Ok(generated_path_count),
     };
+    let target_dir = output_path.join("src").join("paths");
 
-    fs::create_dir_all(format!("{}/src/paths", output_path)).expect("Creating objects dir failed");
+    fs::create_dir_all(&target_dir).expect("Creating objects dir failed");
 
-    let mut mod_file = match File::create(format!("{}/src/paths/mod.rs", output_path)) {
+    let target_file = target_dir.join("mod.rs");
+
+    let mut mod_file = match File::create(target_file) {
         Ok(file) => file,
         Err(err) => {
             return Err(format!("Unable to create file mod.rs {}", err.to_string()));
@@ -93,7 +97,7 @@ fn write_operation_to_file(
     operation: &Operation,
     object_database: &mut ObjectDatabase,
     config: &Config,
-    output_path: &str,
+    output_path: &PathBuf,
 ) -> Result<String, String> {
     let operation_id = match operation.operation_id {
         Some(ref operation_id) => &config.name_mapping.name_to_module_name(operation_id),
@@ -138,8 +142,12 @@ fn write_operation_to_file(
         },
     };
 
-    let mut path_file = match File::create(format!("{}/src/paths/{}.rs", output_path, operation_id))
-    {
+    let full_path = output_path
+        .join("src")
+        .join("paths")
+        .join(format!("{}.rs", operation_id));
+
+    let mut path_file = match File::create(full_path) {
         Ok(file) => file,
         Err(err) => {
             return Err(format!(
