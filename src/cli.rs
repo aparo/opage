@@ -13,7 +13,8 @@ pub fn cli() -> Command {
             Arg::new("spec")
                 .short('s')
                 .help("Input OpenAPI spec")
-                .required(true),
+                .required(true)
+                .multiple(true),
         )
         .arg(
             Arg::new("config")

@@ -6,7 +6,7 @@ use oas3::{
     Spec,
 };
 use types::{
-    EnumDefinition, EnumValue, ModuleInfo, ObjectDefinition, PrimitveDefinition,
+    EnumDefinition, EnumValue, ModuleInfo, ObjectDefinition, PrimitiveDefinition,
     PropertyDefinition, StructDefinition,
 };
 
@@ -109,7 +109,7 @@ pub fn generate_object(
                 Some(name),
                 name_mapping,
             ) {
-                Ok(type_definition) => Ok(ObjectDefinition::Primitive(PrimitveDefinition {
+                Ok(type_definition) => Ok(ObjectDefinition::Primitive(PrimitiveDefinition {
                     name: name.to_owned(),
                     primitive_type: type_definition.clone(),
                     description: type_definition.description.clone(),
@@ -509,7 +509,8 @@ fn get_or_create_property(
         name_mapping,
     ) {
         Ok(property_type_definition) => Ok(PropertyDefinition {
-            type_name: property_type_definition.name,
+            type_name: name_mapping
+                .type_to_property_type(property_name, &property_type_definition.name),
             module: property_type_definition.module,
             name: name_mapping.name_to_property_name(&definition_path, property_name),
             real_name: property_name.clone(),

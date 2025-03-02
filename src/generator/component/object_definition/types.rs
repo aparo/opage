@@ -29,7 +29,7 @@ pub struct PropertyDefinition {
 pub enum ObjectDefinition {
     Struct(StructDefinition),
     Enum(EnumDefinition),
-    Primitive(PrimitveDefinition),
+    Primitive(PrimitiveDefinition),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -117,34 +117,60 @@ impl StructDefinition {
         definition_str.push_str(format!("pub struct {} {{\n", self.name).as_str());
 
         for (_, property) in &self.properties {
-            if property.name != property.real_name && serializable {
-                definition_str
-                    .push_str(format!("#[serde(alias = \"{}\")]\n", property.real_name).as_str());
+            let mut serde_parts = vec![];
+            if serializable
+                && (property.name != property.real_name || is_private_name(&property.real_name))
+            {
+                serde_parts.push(format!("alias = \"{}\"", property.real_name));
             }
 
             if let Some(def) = &property.description {
                 definition_str.push_str(format_description("  ", def).as_str());
             }
 
-            if property.required {
+            if property.type_name.starts_with("Vec<") {
+                serde_parts.push("default".to_string());
+                serde_parts.push("skip_serializing_if = \"Vec::is_empty\"".to_string());
+            } else if property.type_name.starts_with("Map<") {
+                serde_parts.push("default".to_string());
+                serde_parts.push("skip_serializing_if = \"Map::is_empty\"".to_string());
+            } else if !property.required && serializable {
+                if config.serde_skip_null {
+                    serde_parts.push("default".to_string());
+                    serde_parts.push("skip_serializing_if = \"Option::is_none\"".to_string());
+                } else {
+                    serde_parts.push("default".to_string());
+                }
+            }
+
+            if property.required
+                || property.type_name.starts_with("Vec<")
+                || property.type_name.starts_with("Map<")
+            {
+                if !serde_parts.is_empty() {
+                    definition_str
+                        .push_str(format!("  #[serde({})]\n", serde_parts.join(", ")).as_str());
+                }
                 definition_str.push_str(
-                    format!("  pub {}: {},\n", property.name, property.type_name).as_str(),
+                    format!(
+                        "  pub {}: {},\n",
+                        fix_private_name(&property.name),
+                        property.type_name
+                    )
+                    .as_str(),
                 );
             } else {
                 if serializable {
-                    if config.serde_skip_null {
-                        definition_str.push_str(
-                            format!(
-                                "  #[serde(default, skip_serializing_if = \"Option::is_none\")]\n"
-                            )
-                            .as_str(),
-                        );
-                    } else {
-                        definition_str.push_str(format!("  #[serde(default)]\n").as_str());
-                    }
+                    definition_str
+                        .push_str(format!("  #[serde({})]\n", serde_parts.join(", ")).as_str());
                 }
                 definition_str.push_str(
-                    format!("  pub {}: Option<{}>,\n", property.name, property.type_name).as_str(),
+                    format!(
+                        "  pub {}: Option<{}>,\n",
+                        fix_private_name(&property.name),
+                        property.type_name
+                    )
+                    .as_str(),
                 );
             }
         }
@@ -155,7 +181,7 @@ impl StructDefinition {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct PrimitveDefinition {
+pub struct PrimitiveDefinition {
     pub name: String,
     pub primitive_type: TypeDefinition,
     pub description: Option<String>,
@@ -166,4 +192,16 @@ fn format_description(ident: &str, description: &str) -> String {
         .lines()
         .map(|line| format!("{}/// {}\n", ident, line))
         .collect::<String>()
+}
+
+fn is_private_name(name: &str) -> bool {
+    name.eq_ignore_ascii_case("type") || name.starts_with("r#")
+}
+
+fn fix_private_name(name: &str) -> String {
+    if name.eq_ignore_ascii_case("type") {
+        "r#type".to_string()
+    } else {
+        name.to_string()
+    }
 }
