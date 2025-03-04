@@ -46,6 +46,7 @@ pub fn generate_components(
             }
         };
 
+        let component_name = validate_component_name(component_name);
         let definition_path = get_components_base_path();
         let object_name = match resolved_object.title {
             Some(ref title) => config
@@ -110,16 +111,22 @@ pub fn write_object_database(
     config: &Config,
 ) -> Result<(), String> {
     let name_mapping = &config.name_mapping;
-    let target_dir = output_dir.join("src").join("objects");
+
+    let target_dir = if config.use_scope {
+        output_dir.join("src")
+    } else {
+        output_dir.join("src").join("objects")
+    };
 
     fs::create_dir_all(&target_dir).expect("Creating objects dir failed");
 
-    for (_, object_definition) in object_database {
+    for (name, object_definition) in object_database {
         let object_name = get_object_name(object_definition);
 
         let module_name = name_mapping.name_to_module_name(object_name);
 
-        let target_file = target_dir.join(format!("{}.rs", module_name));
+        let target_file = target_dir.join(format!("{}.rs", module_name.replace(".", "/")));
+        fs::create_dir_all(&target_file.parent().unwrap()).expect("Creating objects dir failed");
 
         let mut object_file = match File::create(target_file) {
             Ok(file) => file,
@@ -215,4 +222,13 @@ pub fn write_object_database(
         }
     }
     Ok(())
+}
+
+fn validate_component_name(component_name: &str) -> String {
+    let result = component_name.replace("___", ".");
+    if result.starts_with("_") {
+        result.trim_start_matches("_").to_owned()
+    } else {
+        result
+    }
 }

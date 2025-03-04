@@ -34,6 +34,8 @@ pub struct Config {
     pub serde_serialize: bool,
     #[serde(default = "bool_true")]
     pub serde_deserialize: bool,
+    #[serde(default = "bool_true")]
+    pub use_scope: bool,
 }
 
 impl Default for Config {
@@ -47,6 +49,7 @@ impl Default for Config {
             serde_skip_null: true,
             serde_serialize: true,
             serde_deserialize: true,
+            use_scope: true,
         }
     }
 }

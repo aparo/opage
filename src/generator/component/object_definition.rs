@@ -418,11 +418,13 @@ pub fn generate_struct(
     object_schema: &ObjectSchema,
     name_mapping: &NameMapping,
 ) -> Result<ObjectDefinition, String> {
-    trace!("Generating struct");
+    let full_name = name_mapping.name_to_struct_name(&definition_path, name);
+    trace!("Generating struct: {}", full_name);
+    let struct_name = name_mapping.extract_struct_name(&full_name);
+    let package_name = name_mapping.extract_package_name(&full_name);
     let mut struct_definition = StructDefinition {
-        name: name_mapping
-            .name_to_struct_name(&definition_path, name)
-            .to_owned(),
+        name: struct_name,
+        package: package_name,
         properties: HashMap::new(),
         used_modules: vec![
             ModuleInfo {
@@ -547,12 +549,15 @@ pub fn get_or_create_object(
     }
 
     trace!("Adding struct {} to database", struct_name);
+    let package_name = name_mapping.extract_package_name(&struct_name);
+    let name = name_mapping.extract_struct_name(&struct_name);
 
     object_database.insert(
         struct_name.clone(),
         ObjectDefinition::Struct(StructDefinition {
+            package: package_name,
             used_modules: vec![],
-            name: struct_name.clone(),
+            name: name.clone(),
             properties: HashMap::new(),
             local_objects: HashMap::new(),
             description: property_ref.description.clone(),

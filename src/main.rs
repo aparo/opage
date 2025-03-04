@@ -1,7 +1,7 @@
 pub mod generator;
 pub mod utils;
 
-use std::{fs::File, io::Write, path::Path};
+use std::{fs::File, io::Write};
 
 use clap::Parser;
 use generator::{

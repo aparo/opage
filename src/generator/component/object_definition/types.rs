@@ -8,6 +8,22 @@ pub struct ModuleInfo {
     pub path: String,
 }
 
+impl ModuleInfo {
+    pub fn new(path: &str, name: &str) -> Self {
+        ModuleInfo {
+            name: name.to_string(),
+            path: path.to_string(),
+        }
+    }
+
+    pub fn to_use(&self) -> String {
+        if self.path.is_empty() {
+            return format!("use {};", self.name);
+        }
+        format!("use {}::{};", self.path, self.name)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TypeDefinition {
     pub name: String,
@@ -85,14 +101,19 @@ impl EnumDefinition {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StructDefinition {
-    pub used_modules: Vec<ModuleInfo>,
+    pub package: String,
     pub name: String,
+    pub used_modules: Vec<ModuleInfo>,
     pub properties: HashMap<String, PropertyDefinition>,
     pub local_objects: HashMap<String, Box<ObjectDefinition>>,
     pub description: Option<String>,
 }
 
 impl StructDefinition {
+    pub fn id(&self) -> String {
+        format!("{}::{}", self.package, self.name)
+    }
+
     pub fn get_required_modules(&self) -> Vec<&ModuleInfo> {
         let mut required_modules = self.used_modules.iter().collect::<Vec<&ModuleInfo>>();
         required_modules.append(

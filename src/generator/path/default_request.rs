@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use convert_case::Casing;
 use oas3::{
     spec::{Operation, ParameterIn},
     Spec,
@@ -18,8 +19,7 @@ use crate::{
 };
 
 use super::utils::{
-    generate_request_body, generate_responses, is_path_parameter, use_module_to_string,
-    RequestEntity, TransferMediaType,
+    generate_request_body, generate_responses, is_path_parameter, RequestEntity, TransferMediaType,
 };
 
 pub fn generate_operation(
@@ -74,7 +74,12 @@ pub fn generate_operation(
 
     let response_enum_name = name_mapping.name_to_struct_name(
         &operation_definition_path,
-        &format!("{}ResponseType", &function_name),
+        &format!(
+            "{}ResponseType",
+            &name_mapping
+                .extract_struct_name(&function_name)
+                .to_case(convert_case::Case::Pascal)
+        ),
     );
     let mut response_enum_definition_path = operation_definition_path.clone();
     response_enum_definition_path.push(response_enum_name.clone());
@@ -119,7 +124,10 @@ pub fn generate_operation(
             &response_enum_definition_path,
             &format!("{}Value", entity.canonical_status_code),
         );
-        response_enum_source_code += &format!("pub enum {} {{\n", &response_code_enum_name);
+        response_enum_source_code += &format!(
+            "pub enum {} {{\n",
+            &name_mapping.extract_struct_name(&response_code_enum_name)
+        );
         let mut enum_definition_path = operation_definition_path.clone();
         enum_definition_path.push(response_code_enum_name);
 
@@ -129,13 +137,16 @@ pub fn generate_operation(
             response_enum_source_code += &match transfer_media_type {
                 TransferMediaType::ApplicationJson(type_definiton) => match type_definiton {
                     Some(type_definition) => {
-                        format!("{}({}),\n", transfer_media_type_name, type_definition.name)
+                        format!(
+                            "  {}({}),\n",
+                            transfer_media_type_name, type_definition.name
+                        )
                     }
 
-                    None => format!("{},\n", transfer_media_type_name),
+                    None => format!("  {},\n", transfer_media_type_name),
                 },
                 TransferMediaType::TextPlain => format!(
-                    "{}({}),\n",
+                    "  {}({}),\n",
                     transfer_media_type_name,
                     oas3_type_to_string(&oas3::spec::SchemaType::String)
                 ),
@@ -144,7 +155,10 @@ pub fn generate_operation(
         response_enum_source_code += "}\n\n";
     }
 
-    response_enum_source_code += &format!("pub enum {} {{\n", response_enum_name);
+    response_enum_source_code += &format!(
+        "pub enum {} {{\n",
+        name_mapping.extract_struct_name(&response_enum_name)
+    );
 
     for (status_code, entity) in &response_entities {
         let response_enum_name = name_mapping.name_to_struct_name(
@@ -158,13 +172,13 @@ pub fn generate_operation(
                 Some(transfer_media_type) => match transfer_media_type {
                     TransferMediaType::ApplicationJson(type_definiton) => match type_definiton {
                         Some(type_definition) => {
-                            format!("{}({}),\n", response_enum_name, type_definition.name)
+                            format!("  {}({}),\n", response_enum_name, type_definition.name)
                         }
 
-                        None => format!("{},\n", response_enum_name),
+                        None => format!("  {},\n", response_enum_name),
                     },
                     TransferMediaType::TextPlain => format!(
-                        "{}({}),\n",
+                        "  {}({}),\n",
                         response_enum_name,
                         oas3_type_to_string(&oas3::spec::SchemaType::String)
                     ),
@@ -187,7 +201,7 @@ pub fn generate_operation(
         };
     }
 
-    response_enum_source_code += "UndefinedResponse(reqwest::Response),\n";
+    response_enum_source_code += "  UndefinedResponse(reqwest::Response),\n";
     response_enum_source_code += "}\n";
 
     // Query params
@@ -299,7 +313,7 @@ pub fn generate_operation(
     trace!("Generating source code");
     request_source_code += &module_imports
         .iter()
-        .map(use_module_to_string)
+        .map(|m| m.to_use())
         .collect::<Vec<String>>()
         .join("\n");
     request_source_code += "\n\n";
@@ -655,7 +669,12 @@ fn generate_path_parameter_code(
             description: None,
         })
         .collect::<Vec<PropertyDefinition>>();
+    let package_name = name_mapping.extract_package_name(&path_parameters_struct_name);
+    let path_parameters_struct_name =
+        name_mapping.extract_struct_name(&path_parameters_struct_name);
+
     let path_struct_definition = StructDefinition {
+        package: package_name,
         name: path_parameters_struct_name,
         used_modules: vec![],
         local_objects: HashMap::new(),
@@ -712,11 +731,16 @@ fn generate_query_parameter_code(
     function_name: &str,
 ) -> Result<QueryParametersCode, String> {
     trace!("Generating query params");
+    let mapping_name = name_mapping.name_to_struct_name(
+        &definition_path,
+        &format!("{}QueryParameters", function_name),
+    );
+    let package_name = name_mapping.extract_package_name(&mapping_name);
+    let mapping_structure_name = name_mapping.extract_struct_name(&mapping_name);
+
     let mut query_struct = StructDefinition {
-        name: name_mapping.name_to_struct_name(
-            &definition_path,
-            &format!("{}QueryParameters", &function_name),
-        ),
+        package: package_name,
+        name: mapping_structure_name,
         properties: HashMap::new(),
         used_modules: vec![],
         local_objects: HashMap::new(),
@@ -925,7 +949,7 @@ fn generate_multi_request_type_functions(
 
         request_source_code += &format!(
             "pub async fn {}({}) -> Result<{}, reqwest::Error> {{\n",
-            content_function_name,
+            name_mapping.extract_struct_name(&content_function_name),
             function_parameters.join(", "),
             response_enum_name,
         );
@@ -933,8 +957,10 @@ fn generate_multi_request_type_functions(
         // PRE request processing
         match transfer_media_type {
             TransferMediaType::TextPlain => {
-                request_source_code +=
-                    &format!("let body = {}.to_owned();\n", request_content_variable_name)
+                request_source_code += &format!(
+                    "  let body = {}.to_owned();\n",
+                    request_content_variable_name
+                )
             }
             _ => (),
         }
@@ -951,7 +977,7 @@ fn generate_multi_request_type_functions(
         };
 
         request_source_code += &format!(
-            "let request_builder = client.{}(format!(\"{{server}}{}\", {})){};\n",
+            "  let request_builder = client.{}(format!(\"{{server}}{}\", {})){};\n",
             method.as_str().to_lowercase(),
             path_parameter_code.path_format_string,
             path_parameter_code
