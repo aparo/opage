@@ -361,7 +361,7 @@ pub fn generate_operation(
     request_source_code += &format!(
         "{} async fn {}({}) -> Result<{}, reqwest::Error> {{\n",
         function_visibility,
-        function_name,
+        name_mapping.extract_function_name(&function_name),
         function_parameters.join(", "),
         response_enum_name,
     );
@@ -375,7 +375,7 @@ pub fn generate_operation(
                     match transfer_media_type {
                         TransferMediaType::TextPlain => {
                             request_source_code += &format!(
-                                "let body = {}.to_owned();\n",
+                                "  let body = {}.to_owned();\n",
                                 request_content_variable_name
                             )
                         }
@@ -429,16 +429,16 @@ pub fn generate_operation(
     request_source_code += "    };\n";
 
     if has_response_any_multi_content_type {
-        request_source_code += "let content_type = match response\n";
-        request_source_code += "    .headers()\n";
-        request_source_code += "    .get(\"content-type\") {\n";
-        request_source_code += "    Some(content_type) => match content_type.to_str()\n";
-        request_source_code += "    {\n";
-        request_source_code += "        Ok(content_type) => content_type,\n";
-        request_source_code += "        Err(_) => \"text/plain\",\n";
-        request_source_code += "    },\n";
+        request_source_code += "  let content_type = match response\n";
+        request_source_code += "      .headers()\n";
+        request_source_code += "      .get(\"content-type\") {\n";
+        request_source_code += "      Some(content_type) => match content_type.to_str()\n";
+        request_source_code += "      {\n";
+        request_source_code += "          Ok(content_type) => content_type,\n";
+        request_source_code += "          Err(_) => \"text/plain\",\n";
+        request_source_code += "      },\n";
         request_source_code += &format!(
-            "    None => return Ok({}::UndefinedResponse(response))\n",
+            "      None => return Ok({}::UndefinedResponse(response))\n",
             response_enum_name
         );
         request_source_code += "    };\n\n";
@@ -449,7 +449,7 @@ pub fn generate_operation(
     for (response_key, entity) in &response_entities {
         if entity.content.len() > 1 {
             // Multi content type response
-            request_source_code += &format!("{} => match content_type {{\n", response_key);
+            request_source_code += &format!("     {} => match content_type {{\n", response_key);
 
             for (content_type, transfer_media_type) in &entity.content {
                 match transfer_media_type {
@@ -457,12 +457,12 @@ pub fn generate_operation(
                         match type_definition {
                             Some(type_definition) => {
                                 request_source_code += &format!(
-                                    "\"{}\" => match response.json::<{}>().await {{\n",
+                                    "      \"{}\" => match response.json::<{}>().await {{\n",
                                     content_type, type_definition.name
                                 );
 
                                 request_source_code += &format!(
-                                    "Ok({}) => Ok({}::{}({}::{}({}))),\n",
+                                    "      Ok({}) => Ok({}::{}({}::{}({}))),\n",
                                     name_mapping.name_to_property_name(
                                         &operation_definition_path,
                                         &type_definition.name
@@ -486,12 +486,13 @@ pub fn generate_operation(
                                         &type_definition.name
                                     )
                                 );
-                                request_source_code += "Err(parsing_error) => Err(parsing_error)\n";
-                                request_source_code += "}\n"
+                                request_source_code +=
+                                    "      Err(parsing_error) => Err(parsing_error)\n";
+                                request_source_code += "    }\n"
                             }
                             None => {
                                 request_source_code += &format!(
-                                    "\"{}\" => Ok({}::{}({}::{})),\n",
+                                    "      \"{}\" => Ok({}::{}({}::{})),\n",
                                     content_type,
                                     response_enum_name,
                                     name_mapping.name_to_struct_name(
@@ -512,11 +513,13 @@ pub fn generate_operation(
                         }
                     }
                     TransferMediaType::TextPlain => {
-                        request_source_code +=
-                            &format!("\"{}\" => match response.text().await {{\n", content_type);
+                        request_source_code += &format!(
+                            "    \"{}\" => match response.text().await {{\n",
+                            content_type
+                        );
 
                         request_source_code += &format!(
-                            "Ok(response_text) => Ok({}::{}({}::{}(response_text))),\n",
+                            "      Ok(response_text) => Ok({}::{}({}::{}(response_text))),\n",
                             response_enum_name,
                             name_mapping.name_to_struct_name(
                                 &operation_definition_path,
@@ -532,14 +535,14 @@ pub fn generate_operation(
                                 &TransferMediaType::TextPlain
                             )
                         );
-                        request_source_code += "Err(parsing_error) => Err(parsing_error)\n";
-                        request_source_code += "}\n"
+                        request_source_code += "      Err(parsing_error) => Err(parsing_error)\n";
+                        request_source_code += "    }\n"
                     }
                 }
             }
 
             request_source_code += &format!(
-                "_ => Ok({}::UndefinedResponse(response))\n",
+                "      _ => Ok({}::UndefinedResponse(response))\n",
                 response_enum_name
             );
 
@@ -553,12 +556,12 @@ pub fn generate_operation(
                         match type_definition {
                             Some(type_definition) => {
                                 request_source_code += &format!(
-                                    "{} => match response.json::<{}>().await {{\n",
+                                    "    {} => match response.json::<{}>().await {{\n",
                                     response_key, type_definition.name
                                 );
 
                                 request_source_code += &format!(
-                                    "Ok({}) => Ok({}::{}({})),\n",
+                                    "    Ok({}) => Ok({}::{}({})),\n",
                                     name_mapping.name_to_property_name(
                                         &operation_definition_path,
                                         &type_definition.name
@@ -578,7 +581,7 @@ pub fn generate_operation(
                             }
                             None => {
                                 request_source_code += &format!(
-                                    "{} => Ok({}::{}),\n",
+                                    "    {} => Ok({}::{}),\n",
                                     response_key,
                                     response_enum_name,
                                     name_mapping.name_to_struct_name(
@@ -591,18 +594,18 @@ pub fn generate_operation(
                     }
                     TransferMediaType::TextPlain => {
                         request_source_code +=
-                            &format!("{} => match response.text().await {{\n", response_key);
+                            &format!("    {} => match response.text().await {{\n", response_key);
 
                         request_source_code += &format!(
-                            "Ok(response_text) => Ok({}::{}(response_text)),\n",
+                            "      Ok(response_text) => Ok({}::{}(response_text)),\n",
                             response_enum_name,
                             name_mapping.name_to_struct_name(
                                 &operation_definition_path,
                                 &entity.canonical_status_code
                             )
                         );
-                        request_source_code += "Err(parsing_error) => Err(parsing_error)\n";
-                        request_source_code += "}\n"
+                        request_source_code += "      Err(parsing_error) => Err(parsing_error)\n";
+                        request_source_code += "    }\n"
                     }
                 }
             }
@@ -610,12 +613,12 @@ pub fn generate_operation(
     }
 
     request_source_code += &format!(
-        "_ => Ok({}::UndefinedResponse(response))\n",
+        "    _ => Ok({}::UndefinedResponse(response))\n",
         response_enum_name
     );
 
     // Close match status code
-    request_source_code += "}\n";
+    request_source_code += "  }\n";
 
     // function
     request_source_code += "}\n";
@@ -949,7 +952,7 @@ fn generate_multi_request_type_functions(
 
         request_source_code += &format!(
             "pub async fn {}({}) -> Result<{}, reqwest::Error> {{\n",
-            name_mapping.extract_struct_name(&content_function_name),
+            name_mapping.extract_function_name(&content_function_name),
             function_parameters.join(", "),
             response_enum_name,
         );

@@ -54,9 +54,15 @@ impl NameMapping {
     }
 
     pub fn extract_struct_name(&self, full_name: &str) -> String {
-        let parts: Vec<&str> = full_name.split("::").collect();
+        let parts = split_on_special_chars(full_name);
         let last_part = parts.last().unwrap();
-        last_part.to_string()
+        last_part.to_case(convert_case::Case::Pascal)
+    }
+
+    pub fn extract_function_name(&self, full_name: &str) -> String {
+        let parts = split_on_special_chars(full_name);
+        let last_part = parts.last().unwrap();
+        last_part.to_case(convert_case::Case::Snake)
     }
 
     pub fn extract_package_name(&self, full_name: &str) -> String {
@@ -123,7 +129,7 @@ impl NameMapping {
                 if converted_name.contains(".") {
                     converted_name
                 } else {
-                    format!("commons.{}", converted_name)
+                    format!("common.{}", converted_name)
                 }
             }
         }
@@ -185,44 +191,44 @@ fn split_on_first_upper(name: &str) -> (String, String) {
     (prefix, remainer)
 }
 
-pub fn convert_name(name: &str) -> String {
-    for special_chars in &["::", "."] {
-        if name.contains(special_chars) {
-            let parts: Vec<&str> = name.split(special_chars).collect();
-            let mut converted_name = String::new();
-            for pos in 0..parts.len() {
-                let part = parts[pos];
-                if pos > 0 {
-                    converted_name.push_str(&special_chars);
-                }
-                if pos == parts.len() - 1 {
-                    converted_name.push_str(&part.to_case(convert_case::Case::Snake));
-                    continue;
-                } else {
-                    converted_name.push_str(&part);
-                }
+pub fn split_on_special_chars(name: &str) -> Vec<String> {
+    let mut parts = vec![];
+    let mut part = String::new();
+    for c in name.chars() {
+        if c == '.' || c == ':' {
+            if !part.is_empty() {
+                parts.push(part);
+                part = String::new();
             }
-            return converted_name;
+            continue;
+        }
+        part.push(c);
+    }
+    if !part.is_empty() {
+        parts.push(part);
+    }
+    parts
+}
+
+pub fn convert_name(name: &str) -> String {
+    let tokens = split_on_special_chars(name);
+    if tokens.len() == 1 {
+        return name.to_case(convert_case::Case::Pascal);
+    }
+    let mut converted_name = String::new();
+    for pos in 0..tokens.len() {
+        let token = &tokens[pos];
+        if pos > 0 {
+            converted_name.push_str("::");
+        }
+        if pos == tokens.len() - 1 {
+            converted_name.push_str(&token.to_case(convert_case::Case::Pascal));
+            continue;
+        } else {
+            converted_name.push_str(&token);
         }
     }
-    // if name.contains('.') {
-    //     let parts: Vec<&str> = name.split('.').collect();
-    //     let mut converted_name = String::new();
-    //     for pos in 0..parts.len() {
-    //         let part = parts[pos];
-    //         if pos > 0 {
-    //             converted_name.push_str(".");
-    //         }
-    //         if pos == parts.len() - 1 {
-    //             converted_name.push_str(&part.to_case(convert_case::Case::Snake));
-    //             continue;
-    //         } else {
-    //             converted_name.push_str(&part);
-    //         }
-    //     }
-    //     return converted_name;
-    // }
-    name.to_case(convert_case::Case::Pascal)
+    converted_name
 }
 
 fn fix_struct_names(name: &str) -> String {
@@ -263,9 +269,20 @@ mod tests {
         assert_eq!(path, "common.aggregations.field_date_math");
     }
 
+    #[test]
     fn test_fix_struct_names() {
         let name = "_common___Metadata";
         let fixed_name = fix_struct_names(name);
         assert_eq!(fixed_name, "common::Metadata");
+    }
+
+    #[test]
+    fn test_split_on_special_chars() {
+        let name = "common.aggregations::field_date_math";
+        let parts = split_on_special_chars(name);
+        assert_eq!(parts.len(), 3);
+        assert_eq!(parts[0], "common");
+        assert_eq!(parts[1], "aggregations");
+        assert_eq!(parts[2], "field_date_math");
     }
 }

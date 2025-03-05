@@ -125,7 +125,10 @@ pub fn write_object_database(
 
         let module_name = name_mapping.name_to_module_name(object_name);
 
-        let target_file = target_dir.join(format!("{}.rs", module_name.replace(".", "/")));
+        let target_file = target_dir.join(format!(
+            "{}.rs",
+            module_name.replace(".", "/").replace("::", "/")
+        ));
         fs::create_dir_all(&target_file.parent().unwrap()).expect("Creating objects dir failed");
 
         let mut object_file = match File::create(target_file) {

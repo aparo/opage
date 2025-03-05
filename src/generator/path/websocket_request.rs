@@ -394,7 +394,7 @@ pub fn generate_operation(
     // Function signature
     request_source_code += &format!(
         "pub async fn {}(host: &str, {}) -> Result<{}, tungstenite::Error> {{\n",
-        function_name,
+        name_mapping.extract_function_name(&function_name),
         function_parameters.join(", "),
         socket_stream_struct_name,
     );
