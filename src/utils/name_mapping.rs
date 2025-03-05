@@ -2,7 +2,6 @@ use convert_case::Casing;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use std::collections::HashMap;
-use tracing::trace;
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 pub struct NameMapping {
@@ -49,7 +48,7 @@ impl NameMapping {
         // trace!("name_to_struct_name {}", path_str);
         match self.struct_mapping.get(&path_str) {
             Some(name) => name.clone(),
-            None => name.replace(".", "::"),
+            None => name.replace(".", "::").replace("::_common::", "::"),
         }
     }
 

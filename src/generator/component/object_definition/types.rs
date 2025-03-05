@@ -54,17 +54,69 @@ pub struct EnumValue {
     pub value_type: TypeDefinition,
 }
 
+// pub type ObjectDatabase = HashMap<String, ObjectDefinition>;
+#[derive(Clone, Debug)]
+pub struct ObjectDatabase {
+    objects: HashMap<String, ObjectDefinition>,
+}
+
+impl ObjectDatabase {
+    pub fn new() -> Self {
+        ObjectDatabase {
+            objects: HashMap::new(),
+        }
+    }
+
+    pub fn keys(&self) -> std::collections::hash_map::Keys<String, ObjectDefinition> {
+        self.objects.keys()
+    }
+
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.objects.contains_key(key)
+    }
+
+    pub fn insert(&mut self, key: &str, object: ObjectDefinition) {
+        if key.contains("_common") {
+            println!("inserting object: {:?}", object);
+        }
+        self.objects.insert(key.to_owned(), object);
+    }
+
+    pub fn get(&self, id: &str) -> Option<&ObjectDefinition> {
+        self.objects.get(id)
+    }
+
+    pub fn get_mut(&mut self, id: &str) -> Option<&mut ObjectDefinition> {
+        self.objects.get_mut(id)
+    }
+
+    pub fn remove(&mut self, id: &str) -> Option<ObjectDefinition> {
+        self.objects.remove(id)
+    }
+
+    pub fn iter(&self) -> std::collections::hash_map::Iter<String, ObjectDefinition> {
+        self.objects.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.objects.len()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnumDefinition {
     pub name: String,
+    // pub namespace: String,
     pub used_modules: Vec<ModuleInfo>,
     pub values: HashMap<String, EnumValue>,
     pub description: Option<String>,
 }
 
-pub type ObjectDatabase = HashMap<String, ObjectDefinition>;
-
 impl EnumDefinition {
+    // pub fn id(&self) -> String {
+    //     format!("{}::{}", self.namespace, self.name)
+    // }
+
     pub fn get_required_modules(&self) -> Vec<&ModuleInfo> {
         let mut required_modules = self.used_modules.iter().collect::<Vec<&ModuleInfo>>();
         required_modules.append(

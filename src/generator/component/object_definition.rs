@@ -23,11 +23,11 @@ pub fn get_components_base_path() -> Vec<String> {
     ]
 }
 
-pub fn get_object_name(object_definition: &ObjectDefinition) -> &String {
+pub fn get_object_name(object_definition: &ObjectDefinition) -> String {
     match object_definition {
-        ObjectDefinition::Struct(struct_definition) => &struct_definition.name,
-        ObjectDefinition::Enum(enum_definition) => &enum_definition.name,
-        ObjectDefinition::Primitive(type_definition) => &type_definition.name,
+        ObjectDefinition::Struct(struct_definition) => struct_definition.id(),
+        ObjectDefinition::Enum(enum_definition) => enum_definition.name.clone(),
+        ObjectDefinition::Primitive(type_definition) => type_definition.name.clone(),
     }
 }
 
@@ -553,7 +553,7 @@ pub fn get_or_create_object(
     let name = name_mapping.extract_struct_name(&struct_name);
 
     object_database.insert(
-        struct_name.clone(),
+        &struct_name.clone(),
         ObjectDefinition::Struct(StructDefinition {
             package: package_name,
             used_modules: vec![],
@@ -575,7 +575,7 @@ pub fn get_or_create_object(
         Ok(created_struct) => {
             let name = get_object_name(&created_struct);
             trace!("Updating struct {} in database", name);
-            object_database.insert(name.clone(), created_struct.clone());
+            object_database.insert(&struct_name.clone(), created_struct.clone());
             Ok(created_struct)
         }
         Err(err) => Err(format!("Failed to generate object: {}", err)),

@@ -27,6 +27,8 @@ pub fn generate_components(
     };
 
     for (component_name, object_ref) in &components.schemas {
+        // fix for broken names
+        let component_name = component_name.replace("._common___", ".");
         if config.ignore.component_ignored(&component_name) {
             info!("\"{}\" ignored", component_name);
             continue;
@@ -46,7 +48,7 @@ pub fn generate_components(
             }
         };
 
-        let component_name = validate_component_name(component_name);
+        let component_name = validate_component_name(&component_name);
         let definition_path = get_components_base_path();
         let object_name = match resolved_object.title {
             Some(ref title) => config
@@ -90,14 +92,14 @@ pub fn generate_components(
 
         let object_name = get_object_name(&object_definition);
 
-        match object_database.contains_key(object_name) {
+        match object_database.contains_key(&object_name) {
             true => {
                 error!("ObjectDatabase already contains an object {}", object_name);
                 continue;
             }
             _ => {
                 trace!("Adding component/struct {} to database", object_name);
-                object_database.insert(object_name.clone(), object_definition);
+                object_database.insert(&object_name.clone(), object_definition);
             }
         }
     }
@@ -111,6 +113,9 @@ pub fn write_object_database(
     config: &Config,
 ) -> Result<(), String> {
     let name_mapping = &config.name_mapping;
+    for item in object_database.iter() {
+        println!("{}", item.0);
+    }
 
     let target_dir = if config.use_scope {
         output_dir.join("src")
@@ -120,10 +125,10 @@ pub fn write_object_database(
 
     fs::create_dir_all(&target_dir).expect("Creating objects dir failed");
 
-    for (name, object_definition) in object_database {
+    for (name, object_definition) in object_database.iter() {
         let object_name = get_object_name(object_definition);
 
-        let module_name = name_mapping.name_to_module_name(object_name);
+        let module_name = name_mapping.name_to_module_name(&object_name);
 
         let target_file = target_dir.join(format!(
             "{}.rs",
@@ -211,7 +216,7 @@ pub fn write_object_database(
         }
     };
 
-    for (struct_name, _) in object_database {
+    for (struct_name, _) in object_database.iter() {
         match object_mod_file.write(
             format!(
                 "pub mod {};\n",

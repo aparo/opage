@@ -111,7 +111,7 @@ pub fn get_type_from_any_type(
     let object_path = name_mapping.name_to_module_name(&object_name);
 
     let (object_name, object_path) =
-        name_mapping.validate_object_name_path(object_name, &object_path);
+        name_mapping.validate_object_name_path(&object_name, &object_path);
 
     Ok(TypeDefinition {
         name: object_name.clone(),
@@ -243,7 +243,7 @@ pub fn get_type_from_schema_type(
             let object_path = name_mapping.name_to_module_name(&object_name);
 
             let (object_name, object_path) =
-                name_mapping.validate_object_name_path(object_name, &object_path);
+                name_mapping.validate_object_name_path(&object_name, &object_path);
 
             Ok(TypeDefinition {
                 name: object_name.clone(),
