@@ -255,10 +255,21 @@ pub fn fix_struct_names(name: &str) -> String {
 
 pub fn extract_rust_name(name: &str) -> String {
     let parts = name.split("::").collect::<Vec<&str>>();
-    parts[parts.len() - 1].to_string()
+    fix_private_name(parts[parts.len() - 1])
+}
+
+fn fix_private_name(name: &str) -> String {
+    if name.eq_ignore_ascii_case("type") {
+        "r#type".to_string()
+    } else {
+        name.to_string()
+    }
 }
 
 pub fn fix_rust_description(ident: &str, description: &str) -> String {
+    if description.is_empty() {
+        return "".to_string();
+    }
     description
         .lines()
         .map(|line| format!("{}/// {}\n", ident, line))

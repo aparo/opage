@@ -1,10 +1,11 @@
-use crate::generator::templates::rust::RustEnumTemplate;
+use crate::generator::templates::rust::{Field, RustEnumTemplate, RustStructTemplate};
 use crate::utils::{
     config::Config,
     name_mapping::{extract_rust_name, fix_rust_description},
 };
 use askama::Template;
 use std::collections::HashMap;
+use tracing::field;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModuleInfo {
@@ -173,6 +174,11 @@ impl EnumDefinition {
             description: description.as_str(),
             derivations,
             variants: variants,
+            imports: self
+                .get_required_modules()
+                .iter()
+                .map(|module| module.to_use())
+                .collect(),
         }
         .render()
         .unwrap();
@@ -208,27 +214,26 @@ impl StructDefinition {
     }
 
     pub fn to_string(&self, serializable: bool, config: &Config) -> String {
-        let mut definition_str = String::new();
-        if let Some(def) = &self.description {
-            definition_str.push_str(fix_rust_description("", def).as_str());
-        }
-
+        let description =
+            fix_rust_description("", &self.description.as_ref().map_or("", |d| d.as_str()));
+        let mut derivations = vec!["Debug", "Clone", "PartialEq"];
         if serializable {
-            definition_str.push_str("#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]\n");
-        };
-        definition_str.push_str(format!("pub struct {} {{\n", self.name).as_str());
-
+            derivations.push("Serialize");
+            derivations.push("Deserialize");
+        }
+        let mut fields: Vec<Field> = vec![];
         for (_, property) in &self.properties {
+            let mut annotations = vec![];
             let mut serde_parts = vec![];
             if serializable
                 && (property.name != property.real_name || is_private_name(&property.real_name))
             {
                 serde_parts.push(format!("alias = \"{}\"", property.real_name));
             }
-
-            if let Some(def) = &property.description {
-                definition_str.push_str(fix_rust_description("  ", def).as_str());
-            }
+            let field_description = fix_rust_description(
+                "  ",
+                &property.description.as_ref().map_or("", |d| d.as_str()),
+            );
 
             if property.type_name.starts_with("Vec<") {
                 serde_parts.push("default".to_string());
@@ -250,35 +255,44 @@ impl StructDefinition {
                 || property.type_name.starts_with("Map<")
             {
                 if !serde_parts.is_empty() {
-                    definition_str
-                        .push_str(format!("  #[serde({})]\n", serde_parts.join(", ")).as_str());
+                    annotations.push(format!("#[serde({})]", serde_parts.join(", ")));
                 }
-                definition_str.push_str(
-                    format!(
-                        "  pub {}: {},\n",
-                        fix_private_name(&property.name),
-                        property.type_name
-                    )
-                    .as_str(),
-                );
+                fields.push(Field {
+                    annotations,
+                    description: field_description,
+                    modifier: "pub".to_string(),
+                    name: extract_rust_name(&property.name),
+                    typ: property.type_name.clone(),
+                });
             } else {
                 if serializable {
-                    definition_str
-                        .push_str(format!("  #[serde({})]\n", serde_parts.join(", ")).as_str());
+                    annotations.push(format!("#[serde({})]", serde_parts.join(", ")));
                 }
-                definition_str.push_str(
-                    format!(
-                        "  pub {}: Option<{}>,\n",
-                        fix_private_name(&property.name),
-                        property.type_name
-                    )
-                    .as_str(),
-                );
+                let name = extract_rust_name(&property.name);
+                fields.push(Field {
+                    annotations,
+                    description: field_description,
+                    modifier: "pub".to_string(),
+                    name,
+                    typ: format!("Option<{}>", extract_rust_name(&property.type_name)),
+                });
             }
         }
-
-        definition_str.push('}');
-        definition_str
+        fields.sort();
+        let template = RustStructTemplate {
+            name: extract_rust_name(&self.name).as_str(),
+            description: description.as_str(),
+            derivations,
+            fields,
+            imports: self
+                .get_required_modules()
+                .iter()
+                .map(|module| module.to_use())
+                .collect(),
+        }
+        .render()
+        .unwrap();
+        template
     }
 }
 
@@ -291,12 +305,4 @@ pub struct PrimitiveDefinition {
 
 fn is_private_name(name: &str) -> bool {
     name.eq_ignore_ascii_case("type") || name.starts_with("r#")
-}
-
-fn fix_private_name(name: &str) -> String {
-    if name.eq_ignore_ascii_case("type") {
-        "r#type".to_string()
-    } else {
-        name.to_string()
-    }
 }
