@@ -1,6 +1,10 @@
+use crate::generator::templates::rust::RustEnumTemplate;
+use crate::utils::{
+    config::Config,
+    name_mapping::{extract_rust_name, fix_rust_description},
+};
+use askama::Template;
 use std::collections::HashMap;
-
-use crate::utils::config::Config;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModuleInfo {
@@ -143,24 +147,36 @@ impl EnumDefinition {
     }
 
     pub fn to_string(&self, serializable: bool) -> String {
-        let mut definition_str = String::new();
+        // let mut definition_str = String::new();
+        let description =
+            fix_rust_description("", &self.description.as_ref().map_or("", |d| d.as_str()));
+        let variants = self
+            .values
+            .iter()
+            .map(|(_, enum_value)| {
+                format!(
+                    "{}({})",
+                    extract_rust_name(&enum_value.name),
+                    extract_rust_name(&enum_value.value_type.name)
+                )
+            })
+            .collect();
 
-        if let Some(desc) = &self.description {
-            definition_str.push_str(format_description("", desc).as_str());
-        }
+        let mut derivations = vec!["Debug", "Clone", "PartialEq"];
         if serializable {
-            definition_str.push_str("#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]\n")
-        };
-        definition_str.push_str(format!("pub enum {} {{\n", self.name).as_str());
-
-        for (_, enum_value) in &self.values {
-            definition_str.push_str(
-                format!("  {}({}),\n", enum_value.name, enum_value.value_type.name).as_str(),
-            );
+            derivations.push("Serialize");
+            derivations.push("Deserialize");
         }
 
-        definition_str.push_str("}");
-        definition_str
+        let template = RustEnumTemplate {
+            name: extract_rust_name(&self.name).as_str(),
+            description: description.as_str(),
+            derivations,
+            variants: variants,
+        }
+        .render()
+        .unwrap();
+        template
     }
 }
 
@@ -194,7 +210,7 @@ impl StructDefinition {
     pub fn to_string(&self, serializable: bool, config: &Config) -> String {
         let mut definition_str = String::new();
         if let Some(def) = &self.description {
-            definition_str.push_str(format_description("", def).as_str());
+            definition_str.push_str(fix_rust_description("", def).as_str());
         }
 
         if serializable {
@@ -211,7 +227,7 @@ impl StructDefinition {
             }
 
             if let Some(def) = &property.description {
-                definition_str.push_str(format_description("  ", def).as_str());
+                definition_str.push_str(fix_rust_description("  ", def).as_str());
             }
 
             if property.type_name.starts_with("Vec<") {
@@ -271,13 +287,6 @@ pub struct PrimitiveDefinition {
     pub name: String,
     pub primitive_type: TypeDefinition,
     pub description: Option<String>,
-}
-
-fn format_description(ident: &str, description: &str) -> String {
-    description
-        .lines()
-        .map(|line| format!("{}/// {}\n", ident, line))
-        .collect::<String>()
 }
 
 fn is_private_name(name: &str) -> bool {

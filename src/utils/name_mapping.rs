@@ -230,7 +230,7 @@ pub fn convert_name(name: &str) -> String {
     converted_name
 }
 
-fn fix_struct_names(name: &str) -> String {
+pub fn fix_struct_names(name: &str) -> String {
     let mut name = name;
     if name.contains("___") {
         let parts: Vec<&str> = name.split("___").collect();
@@ -251,6 +251,20 @@ fn fix_struct_names(name: &str) -> String {
         }
     }
     name.to_owned()
+}
+
+pub fn extract_rust_name(name: &str) -> String {
+    let parts = name.split("::").collect::<Vec<&str>>();
+    parts[parts.len() - 1].to_string()
+}
+
+pub fn fix_rust_description(ident: &str, description: &str) -> String {
+    description
+        .lines()
+        .map(|line| format!("{}/// {}\n", ident, line))
+        .collect::<String>()
+        .trim()
+        .to_string()
 }
 
 #[cfg(test)]

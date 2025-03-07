@@ -11,7 +11,13 @@ use object_definition::{
 };
 use tracing::{error, info, trace};
 
-use crate::utils::config::Config;
+use crate::utils::{
+    config::Config,
+    name_mapping::{extract_rust_name, fix_rust_description},
+};
+
+use super::templates::rust::RustTypeTemplate;
+use askama::Template;
 
 pub mod object_definition;
 pub mod type_definition;
@@ -187,21 +193,23 @@ pub fn write_object_database(
                     .expect("Failed to write imports");
                 object_file.write("\n".as_bytes()).unwrap();
 
-                if let Some(desc) = &primitive_definition.description {
-                    object_file
-                        .write(format!("/// {}\n", desc).as_bytes())
-                        .unwrap();
-                }
+                let description = fix_rust_description(
+                    "",
+                    &primitive_definition
+                        .description
+                        .as_ref()
+                        .map_or("", |d| d.as_str()),
+                );
 
-                object_file
-                    .write(
-                        format!(
-                            "pub type {} = {};\n",
-                            primitive_definition.name, primitive_definition.primitive_type.name
-                        )
-                        .as_bytes(),
-                    )
-                    .unwrap();
+                let template = RustTypeTemplate {
+                    name: extract_rust_name(&primitive_definition.name).as_str(),
+                    description: description.as_str(),
+                    value: extract_rust_name(&primitive_definition.primitive_type.name).as_str(),
+                }
+                .render()
+                .unwrap();
+
+                object_file.write(template.as_bytes()).unwrap();
             }
         }
     }
