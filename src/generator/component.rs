@@ -127,6 +127,9 @@ pub fn write_object_database(
 
     for (name, object_definition) in object_database.iter() {
         let object_name = get_object_name(object_definition);
+        if object_name.contains("common") {
+            println!("inserting object: {:?}", object_name);
+        }
 
         let module_name = name_mapping.name_to_module_name(&object_name);
 

@@ -125,7 +125,7 @@ impl NameMapping {
         match self.module_mapping.get(&converted_name) {
             Some(name) => name.clone(),
             None => {
-                if converted_name.contains(".") {
+                if converted_name.contains(".") || converted_name.contains("::") {
                     converted_name
                 } else {
                     format!("common.{}", converted_name)

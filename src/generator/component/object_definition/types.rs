@@ -10,9 +10,25 @@ pub struct ModuleInfo {
 
 impl ModuleInfo {
     pub fn new(path: &str, name: &str) -> Self {
+        let mut final_name = name.to_string();
+        let mut final_path = path.to_string();
+        if final_name.contains("::") {
+            let parts: Vec<&str> = name.split("::").collect();
+            final_name = parts[parts.len() - 1].to_owned();
+            for sep in parts[..parts.len() - 1].iter() {
+                if final_path.contains(format!("::{}", sep).as_str()) {
+                    continue;
+                }
+                if !final_path.is_empty() {
+                    final_path.push_str("::");
+                }
+                final_path.push_str(sep);
+            }
+        }
+
         ModuleInfo {
-            name: name.to_string(),
-            path: path.to_string(),
+            name: final_name,
+            path: final_path,
         }
     }
 
@@ -76,9 +92,6 @@ impl ObjectDatabase {
     }
 
     pub fn insert(&mut self, key: &str, object: ObjectDefinition) {
-        if key.contains("_common") {
-            println!("inserting object: {:?}", object);
-        }
         self.objects.insert(key.to_owned(), object);
     }
 
