@@ -1,0 +1,11 @@
+{%- if description.len()>0 ~%}
+{{description}}
+{%~ endif -%}
+{% if derivations.len()>0 ~%}
+#[derive({% for i in derivations %}{{ i }}, {% endfor %})]
+{%~ endif -%}
+pub enum {{ name }} {
+{%- for variant in variants %}
+    {{ variant }},
+{%- endfor %}
+}

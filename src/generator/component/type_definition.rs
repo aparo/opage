@@ -1,8 +1,8 @@
-use log::trace;
 use oas3::{
     spec::{ObjectSchema, SchemaTypeSet},
     Spec,
 };
+use tracing::trace;
 
 use crate::utils::name_mapping::NameMapping;
 
@@ -108,16 +108,17 @@ pub fn get_type_from_any_type(
     };
 
     let object_name = get_object_name(&object_definition);
+    let object_path = name_mapping.name_to_module_name(&object_name);
+
+    let (object_name, object_path) =
+        name_mapping.validate_object_name_path(&object_name, &object_path);
 
     Ok(TypeDefinition {
         name: object_name.clone(),
-        module: Some(ModuleInfo {
-            path: format!(
-                "crate::objects::{}",
-                name_mapping.name_to_module_name(&object_name)
-            ),
-            name: object_name.clone(),
-        }),
+        module: Some(ModuleInfo::new(
+            &format!("crate::{}", object_path.replace(".", "::")),
+            &object_name,
+        )),
         description: object_schema.description.clone(),
     })
 }
@@ -231,16 +232,25 @@ pub fn get_type_from_schema_type(
             };
 
             let object_name = get_object_name(&object_definition);
+            if object_name.eq("object") || object_name.eq("dict") {
+                return Ok(TypeDefinition {
+                    name: "serde_json::Value".to_owned(),
+                    module: None,
+                    description: object_schema.description.clone(),
+                });
+            }
+
+            let object_path = name_mapping.name_to_module_name(&object_name);
+
+            let (object_name, object_path) =
+                name_mapping.validate_object_name_path(&object_name, &object_path);
 
             Ok(TypeDefinition {
                 name: object_name.clone(),
-                module: Some(ModuleInfo {
-                    path: format!(
-                        "crate::objects::{}",
-                        name_mapping.name_to_module_name(&object_name)
-                    ),
-                    name: object_name.clone(),
-                }),
+                module: Some(ModuleInfo::new(
+                    &format!("crate::{}", object_path.replace(".", "::")),
+                    &object_name,
+                )),
                 description: object_schema.description.clone(),
             })
         }

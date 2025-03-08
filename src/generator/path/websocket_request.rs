@@ -1,6 +1,5 @@
 use super::utils::{
-    generate_request_body, generate_responses, is_path_parameter, use_module_to_string,
-    TransferMediaType,
+    generate_request_body, generate_responses, is_path_parameter, TransferMediaType,
 };
 use crate::{
     generator::component::{
@@ -14,12 +13,12 @@ use crate::{
     },
     utils::name_mapping::NameMapping,
 };
-use log::error;
 use oas3::{
     spec::{FromRef, ObjectOrReference, ObjectSchema, Operation, ParameterIn},
     Spec,
 };
 use std::collections::HashMap;
+use tracing::error;
 
 fn read_websocket_stream_to_string(struct_name: &str, response_type_name: &str) -> String {
     return format!(
@@ -137,7 +136,12 @@ pub fn generate_operation(
             description: None,
         })
         .collect::<Vec<PropertyDefinition>>();
+    let package_name = name_mapping.extract_package_name(&path_parameters_struct_name);
+    let path_parameters_struct_name =
+        name_mapping.extract_struct_name(&path_parameters_struct_name);
+
     let path_struct_definition = StructDefinition {
+        package: package_name,
         name: path_parameters_struct_name,
         used_modules: vec![],
         properties: path_parameters_ordered
@@ -214,13 +218,17 @@ pub fn generate_operation(
     if let Some(ref socket_transfer_type_module) = socket_transfer_type_definition.module {
         module_imports.push(socket_transfer_type_module.clone());
     }
+    let query_parameter_name = format!(
+        "{}QueryParameters",
+        name_mapping.name_to_struct_name(&operation_definition_path, &function_name)
+    );
+    let package_name = name_mapping.extract_package_name(&query_parameter_name);
+    let query_parameter_name = name_mapping.extract_struct_name(&query_parameter_name);
 
     // Query params
     let mut query_struct = StructDefinition {
-        name: format!(
-            "{}QueryParameters",
-            name_mapping.name_to_struct_name(&operation_definition_path, &function_name)
-        ),
+        package: package_name,
+        name: query_parameter_name,
         properties: HashMap::new(),
         used_modules: vec![],
         local_objects: HashMap::new(),
@@ -367,7 +375,7 @@ pub fn generate_operation(
 
     request_source_code += &module_imports
         .iter()
-        .map(use_module_to_string)
+        .map(|m| m.to_use())
         .collect::<Vec<String>>()
         .join("\n");
     request_source_code += "\n\n";
@@ -386,7 +394,7 @@ pub fn generate_operation(
     // Function signature
     request_source_code += &format!(
         "pub async fn {}(host: &str, {}) -> Result<{}, tungstenite::Error> {{\n",
-        function_name,
+        name_mapping.extract_function_name(&function_name),
         function_parameters.join(", "),
         socket_stream_struct_name,
     );

@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use log::{error, info, trace};
 use oas3::{
     spec::{ObjectOrReference, ObjectSchema, SchemaTypeSet},
     Spec,
 };
+use tracing::{error, info, trace};
 use types::{
-    EnumDefinition, EnumValue, ModuleInfo, ObjectDefinition, PrimitveDefinition,
+    EnumDefinition, EnumValue, ModuleInfo, ObjectDefinition, PrimitiveDefinition,
     PropertyDefinition, StructDefinition,
 };
 
@@ -23,11 +23,11 @@ pub fn get_components_base_path() -> Vec<String> {
     ]
 }
 
-pub fn get_object_name(object_definition: &ObjectDefinition) -> &String {
+pub fn get_object_name(object_definition: &ObjectDefinition) -> String {
     match object_definition {
-        ObjectDefinition::Struct(struct_definition) => &struct_definition.name,
-        ObjectDefinition::Enum(enum_definition) => &enum_definition.name,
-        ObjectDefinition::Primitive(type_definition) => &type_definition.name,
+        ObjectDefinition::Struct(struct_definition) => struct_definition.id(),
+        ObjectDefinition::Enum(enum_definition) => enum_definition.name.clone(),
+        ObjectDefinition::Primitive(type_definition) => type_definition.name.clone(),
     }
 }
 
@@ -109,7 +109,7 @@ pub fn generate_object(
                 Some(name),
                 name_mapping,
             ) {
-                Ok(type_definition) => Ok(ObjectDefinition::Primitive(PrimitveDefinition {
+                Ok(type_definition) => Ok(ObjectDefinition::Primitive(PrimitiveDefinition {
                     name: name.to_owned(),
                     primitive_type: type_definition.clone(),
                     description: type_definition.description.clone(),
@@ -418,11 +418,13 @@ pub fn generate_struct(
     object_schema: &ObjectSchema,
     name_mapping: &NameMapping,
 ) -> Result<ObjectDefinition, String> {
-    trace!("Generating struct");
+    let full_name = name_mapping.name_to_struct_name(&definition_path, name);
+    trace!("Generating struct: {}", full_name);
+    let struct_name = name_mapping.extract_struct_name(&full_name);
+    let package_name = name_mapping.extract_package_name(&full_name);
     let mut struct_definition = StructDefinition {
-        name: name_mapping
-            .name_to_struct_name(&definition_path, name)
-            .to_owned(),
+        name: struct_name,
+        package: package_name,
         properties: HashMap::new(),
         used_modules: vec![
             ModuleInfo {
@@ -509,7 +511,8 @@ fn get_or_create_property(
         name_mapping,
     ) {
         Ok(property_type_definition) => Ok(PropertyDefinition {
-            type_name: property_type_definition.name,
+            type_name: name_mapping
+                .type_to_property_type(property_name, &property_type_definition.name),
             module: property_type_definition.module,
             name: name_mapping.name_to_property_name(&definition_path, property_name),
             real_name: property_name.clone(),
@@ -546,12 +549,15 @@ pub fn get_or_create_object(
     }
 
     trace!("Adding struct {} to database", struct_name);
+    let package_name = name_mapping.extract_package_name(&struct_name);
+    let name = name_mapping.extract_struct_name(&struct_name);
 
     object_database.insert(
-        struct_name.clone(),
+        &struct_name.clone(),
         ObjectDefinition::Struct(StructDefinition {
+            package: package_name,
             used_modules: vec![],
-            name: struct_name.clone(),
+            name: name.clone(),
             properties: HashMap::new(),
             local_objects: HashMap::new(),
             description: property_ref.description.clone(),
@@ -569,7 +575,7 @@ pub fn get_or_create_object(
         Ok(created_struct) => {
             let name = get_object_name(&created_struct);
             trace!("Updating struct {} in database", name);
-            object_database.insert(name.clone(), created_struct.clone());
+            object_database.insert(&struct_name.clone(), created_struct.clone());
             Ok(created_struct)
         }
         Err(err) => Err(format!("Failed to generate object: {}", err)),

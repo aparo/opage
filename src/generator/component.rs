@@ -1,16 +1,23 @@
 use std::{
     fs::{self, File},
     io::Write,
+    path::PathBuf,
 };
 
-use log::{error, info, trace};
 use oas3::Spec;
 use object_definition::{
     generate_object, get_components_base_path, get_object_name, modules_to_string,
     types::{ObjectDatabase, ObjectDefinition},
 };
+use tracing::{error, info, trace};
 
-use crate::utils::config::Config;
+use crate::utils::{
+    config::Config,
+    name_mapping::{extract_rust_name, fix_rust_description},
+};
+
+use super::templates::rust::RustTypeTemplate;
+use askama::Template;
 
 pub mod object_definition;
 pub mod type_definition;
@@ -26,6 +33,8 @@ pub fn generate_components(
     };
 
     for (component_name, object_ref) in &components.schemas {
+        // fix for broken names
+        let component_name = component_name.replace("._common___", ".");
         if config.ignore.component_ignored(&component_name) {
             info!("\"{}\" ignored", component_name);
             continue;
@@ -45,6 +54,7 @@ pub fn generate_components(
             }
         };
 
+        let component_name = validate_component_name(&component_name);
         let definition_path = get_components_base_path();
         let object_name = match resolved_object.title {
             Some(ref title) => config
@@ -88,14 +98,14 @@ pub fn generate_components(
 
         let object_name = get_object_name(&object_definition);
 
-        match object_database.contains_key(object_name) {
+        match object_database.contains_key(&object_name) {
             true => {
                 error!("ObjectDatabase already contains an object {}", object_name);
                 continue;
             }
             _ => {
                 trace!("Adding component/struct {} to database", object_name);
-                object_database.insert(object_name.clone(), object_definition);
+                object_database.insert(&object_name.clone(), object_definition);
             }
         }
     }
@@ -104,31 +114,48 @@ pub fn generate_components(
 }
 
 pub fn write_object_database(
-    output_dir: &str,
+    output_dir: &PathBuf,
     object_database: &ObjectDatabase,
     config: &Config,
 ) -> Result<(), String> {
     let name_mapping = &config.name_mapping;
-    fs::create_dir_all(format!("{}/src/objects/", output_dir))
-        .expect("Creating objects dir failed");
+    for item in object_database.iter() {
+        println!("{}", item.0);
+    }
 
-    for (_, object_definition) in object_database {
+    let target_dir = if config.use_scope {
+        output_dir.join("src")
+    } else {
+        output_dir.join("src").join("objects")
+    };
+
+    fs::create_dir_all(&target_dir).expect("Creating objects dir failed");
+
+    for (name, object_definition) in object_database.iter() {
         let object_name = get_object_name(object_definition);
+        if object_name.contains("common") {
+            println!("inserting object: {:?}", object_name);
+        }
 
-        let module_name = name_mapping.name_to_module_name(object_name);
+        let module_name = name_mapping.name_to_module_name(&object_name);
 
-        let mut object_file =
-            match File::create(format!("{}/src/objects/{}.rs", output_dir, module_name)) {
-                Ok(file) => file,
-                Err(err) => {
-                    error!(
-                        "Unable to create file {}.rs {}",
-                        module_name,
-                        err.to_string()
-                    );
-                    continue;
-                }
-            };
+        let target_file = target_dir.join(format!(
+            "{}.rs",
+            module_name.replace(".", "/").replace("::", "/")
+        ));
+        fs::create_dir_all(&target_file.parent().unwrap()).expect("Creating objects dir failed");
+
+        let mut object_file = match File::create(target_file) {
+            Ok(file) => file,
+            Err(err) => {
+                error!(
+                    "Unable to create file {}.rs {}",
+                    module_name,
+                    err.to_string()
+                );
+                continue;
+            }
+        };
 
         match object_definition {
             ObjectDefinition::Struct(struct_definition) => {
@@ -166,37 +193,41 @@ pub fn write_object_database(
                     .expect("Failed to write imports");
                 object_file.write("\n".as_bytes()).unwrap();
 
-                if let Some(desc) = &primitive_definition.description {
-                    object_file
-                        .write(format!("/// {}\n", desc).as_bytes())
-                        .unwrap();
-                }
+                let description = fix_rust_description(
+                    "",
+                    &primitive_definition
+                        .description
+                        .as_ref()
+                        .map_or("", |d| d.as_str()),
+                );
 
-                object_file
-                    .write(
-                        format!(
-                            "pub type {} = {};\n",
-                            primitive_definition.name, primitive_definition.primitive_type.name
-                        )
-                        .as_bytes(),
-                    )
-                    .unwrap();
+                let template = RustTypeTemplate {
+                    name: extract_rust_name(&primitive_definition.name).as_str(),
+                    description: description.as_str(),
+                    value: extract_rust_name(&primitive_definition.primitive_type.name).as_str(),
+                }
+                .render()
+                .unwrap();
+
+                object_file.write(template.as_bytes()).unwrap();
             }
         }
     }
 
-    let mut object_mod_file = match File::create(format!("{}/src/objects/mod.rs", output_dir)) {
+    let target_mod = target_dir.join("mod.rs");
+
+    let mut object_mod_file = match File::create(&target_mod) {
         Ok(file) => file,
         Err(err) => {
             return Err(format!(
                 "Unable to create file {} {}",
-                format!("{}/src/objects/mod.rs", output_dir),
+                target_mod.as_os_str().to_string_lossy(),
                 err.to_string()
             ))
         }
     };
 
-    for (struct_name, _) in object_database {
+    for (struct_name, _) in object_database.iter() {
         match object_mod_file.write(
             format!(
                 "pub mod {};\n",
@@ -210,4 +241,13 @@ pub fn write_object_database(
         }
     }
     Ok(())
+}
+
+fn validate_component_name(component_name: &str) -> String {
+    let result = component_name.replace("___", ".");
+    if result.starts_with("_") {
+        result.trim_start_matches("_").to_owned()
+    } else {
+        result
+    }
 }

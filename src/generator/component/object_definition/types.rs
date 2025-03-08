@@ -1,11 +1,48 @@
+use crate::generator::templates::rust::{Field, RustEnumTemplate, RustStructTemplate};
+use crate::utils::{
+    config::Config,
+    name_mapping::{extract_rust_name, fix_rust_description},
+};
+use askama::Template;
 use std::collections::HashMap;
-
-use crate::utils::config::Config;
+use tracing::field;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModuleInfo {
     pub name: String,
     pub path: String,
+}
+
+impl ModuleInfo {
+    pub fn new(path: &str, name: &str) -> Self {
+        let mut final_name = name.to_string();
+        let mut final_path = path.to_string();
+        if final_name.contains("::") {
+            let parts: Vec<&str> = name.split("::").collect();
+            final_name = parts[parts.len() - 1].to_owned();
+            for sep in parts[..parts.len() - 1].iter() {
+                if final_path.contains(format!("::{}", sep).as_str()) {
+                    continue;
+                }
+                if !final_path.is_empty() {
+                    final_path.push_str("::");
+                }
+                final_path.push_str(sep);
+            }
+        }
+
+        ModuleInfo {
+            name: final_name,
+            path: final_path,
+        }
+    }
+
+    pub fn to_use(&self) -> String {
+        if self.path.is_empty() {
+            return format!("use {};", self.name);
+        }
+        format!("use {}::{};", self.path, self.name)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -29,7 +66,7 @@ pub struct PropertyDefinition {
 pub enum ObjectDefinition {
     Struct(StructDefinition),
     Enum(EnumDefinition),
-    Primitive(PrimitveDefinition),
+    Primitive(PrimitiveDefinition),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -38,17 +75,66 @@ pub struct EnumValue {
     pub value_type: TypeDefinition,
 }
 
+// pub type ObjectDatabase = HashMap<String, ObjectDefinition>;
+#[derive(Clone, Debug)]
+pub struct ObjectDatabase {
+    objects: HashMap<String, ObjectDefinition>,
+}
+
+impl ObjectDatabase {
+    pub fn new() -> Self {
+        ObjectDatabase {
+            objects: HashMap::new(),
+        }
+    }
+
+    pub fn keys(&self) -> std::collections::hash_map::Keys<String, ObjectDefinition> {
+        self.objects.keys()
+    }
+
+    pub fn contains_key(&self, key: &str) -> bool {
+        self.objects.contains_key(key)
+    }
+
+    pub fn insert(&mut self, key: &str, object: ObjectDefinition) {
+        self.objects.insert(key.to_owned(), object);
+    }
+
+    pub fn get(&self, id: &str) -> Option<&ObjectDefinition> {
+        self.objects.get(id)
+    }
+
+    pub fn get_mut(&mut self, id: &str) -> Option<&mut ObjectDefinition> {
+        self.objects.get_mut(id)
+    }
+
+    pub fn remove(&mut self, id: &str) -> Option<ObjectDefinition> {
+        self.objects.remove(id)
+    }
+
+    pub fn iter(&self) -> std::collections::hash_map::Iter<String, ObjectDefinition> {
+        self.objects.iter()
+    }
+
+    pub fn len(&self) -> usize {
+        self.objects.len()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnumDefinition {
     pub name: String,
+    // pub namespace: String,
     pub used_modules: Vec<ModuleInfo>,
     pub values: HashMap<String, EnumValue>,
     pub description: Option<String>,
 }
 
-pub type ObjectDatabase = HashMap<String, ObjectDefinition>;
-
 impl EnumDefinition {
+    // pub fn id(&self) -> String {
+    //     format!("{}::{}", self.namespace, self.name)
+    // }
+
     pub fn get_required_modules(&self) -> Vec<&ModuleInfo> {
         let mut required_modules = self.used_modules.iter().collect::<Vec<&ModuleInfo>>();
         required_modules.append(
@@ -62,37 +148,59 @@ impl EnumDefinition {
     }
 
     pub fn to_string(&self, serializable: bool) -> String {
-        let mut definition_str = String::new();
+        // let mut definition_str = String::new();
+        let description =
+            fix_rust_description("", &self.description.as_ref().map_or("", |d| d.as_str()));
+        let variants = self
+            .values
+            .iter()
+            .map(|(_, enum_value)| {
+                format!(
+                    "{}({})",
+                    extract_rust_name(&enum_value.name),
+                    extract_rust_name(&enum_value.value_type.name)
+                )
+            })
+            .collect();
 
-        if let Some(desc) = &self.description {
-            definition_str.push_str(format_description("", desc).as_str());
-        }
+        let mut derivations = vec!["Debug", "Clone", "PartialEq"];
         if serializable {
-            definition_str.push_str("#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]\n")
-        };
-        definition_str.push_str(format!("pub enum {} {{\n", self.name).as_str());
-
-        for (_, enum_value) in &self.values {
-            definition_str.push_str(
-                format!("  {}({}),\n", enum_value.name, enum_value.value_type.name).as_str(),
-            );
+            derivations.push("Serialize");
+            derivations.push("Deserialize");
         }
 
-        definition_str.push_str("}");
-        definition_str
+        let template = RustEnumTemplate {
+            name: extract_rust_name(&self.name).as_str(),
+            description: description.as_str(),
+            derivations,
+            variants: variants,
+            imports: self
+                .get_required_modules()
+                .iter()
+                .map(|module| module.to_use())
+                .collect(),
+        }
+        .render()
+        .unwrap();
+        template
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StructDefinition {
-    pub used_modules: Vec<ModuleInfo>,
+    pub package: String,
     pub name: String,
+    pub used_modules: Vec<ModuleInfo>,
     pub properties: HashMap<String, PropertyDefinition>,
     pub local_objects: HashMap<String, Box<ObjectDefinition>>,
     pub description: Option<String>,
 }
 
 impl StructDefinition {
+    pub fn id(&self) -> String {
+        format!("{}::{}", self.package, self.name)
+    }
+
     pub fn get_required_modules(&self) -> Vec<&ModuleInfo> {
         let mut required_modules = self.used_modules.iter().collect::<Vec<&ModuleInfo>>();
         required_modules.append(
@@ -106,64 +214,95 @@ impl StructDefinition {
     }
 
     pub fn to_string(&self, serializable: bool, config: &Config) -> String {
-        let mut definition_str = String::new();
-        if let Some(def) = &self.description {
-            definition_str.push_str(format_description("", def).as_str());
-        }
-
+        let description =
+            fix_rust_description("", &self.description.as_ref().map_or("", |d| d.as_str()));
+        let mut derivations = vec!["Debug", "Clone", "PartialEq"];
         if serializable {
-            definition_str.push_str("#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]\n");
-        };
-        definition_str.push_str(format!("pub struct {} {{\n", self.name).as_str());
-
+            derivations.push("Serialize");
+            derivations.push("Deserialize");
+        }
+        let mut fields: Vec<Field> = vec![];
         for (_, property) in &self.properties {
-            if property.name != property.real_name && serializable {
-                definition_str
-                    .push_str(format!("#[serde(alias = \"{}\")]\n", property.real_name).as_str());
+            let mut annotations = vec![];
+            let mut serde_parts = vec![];
+            if serializable
+                && (property.name != property.real_name || is_private_name(&property.real_name))
+            {
+                serde_parts.push(format!("alias = \"{}\"", property.real_name));
+            }
+            let field_description = fix_rust_description(
+                "  ",
+                &property.description.as_ref().map_or("", |d| d.as_str()),
+            );
+
+            if property.type_name.starts_with("Vec<") {
+                serde_parts.push("default".to_string());
+                serde_parts.push("skip_serializing_if = \"Vec::is_empty\"".to_string());
+            } else if property.type_name.starts_with("Map<") {
+                serde_parts.push("default".to_string());
+                serde_parts.push("skip_serializing_if = \"Map::is_empty\"".to_string());
+            } else if !property.required && serializable {
+                if config.serde_skip_null {
+                    serde_parts.push("default".to_string());
+                    serde_parts.push("skip_serializing_if = \"Option::is_none\"".to_string());
+                } else {
+                    serde_parts.push("default".to_string());
+                }
             }
 
-            if let Some(def) = &property.description {
-                definition_str.push_str(format_description("  ", def).as_str());
-            }
-
-            if property.required {
-                definition_str.push_str(
-                    format!("  pub {}: {},\n", property.name, property.type_name).as_str(),
-                );
+            if property.required
+                || property.type_name.starts_with("Vec<")
+                || property.type_name.starts_with("Map<")
+            {
+                if !serde_parts.is_empty() {
+                    annotations.push(format!("#[serde({})]", serde_parts.join(", ")));
+                }
+                fields.push(Field {
+                    annotations,
+                    description: field_description,
+                    modifier: "pub".to_string(),
+                    name: extract_rust_name(&property.name),
+                    typ: property.type_name.clone(),
+                });
             } else {
                 if serializable {
-                    if config.serde_skip_null {
-                        definition_str.push_str(
-                            format!(
-                                "  #[serde(default, skip_serializing_if = \"Option::is_none\")]\n"
-                            )
-                            .as_str(),
-                        );
-                    } else {
-                        definition_str.push_str(format!("  #[serde(default)]\n").as_str());
-                    }
+                    annotations.push(format!("#[serde({})]", serde_parts.join(", ")));
                 }
-                definition_str.push_str(
-                    format!("  pub {}: Option<{}>,\n", property.name, property.type_name).as_str(),
-                );
+                let name = extract_rust_name(&property.name);
+                fields.push(Field {
+                    annotations,
+                    description: field_description,
+                    modifier: "pub".to_string(),
+                    name,
+                    typ: format!("Option<{}>", extract_rust_name(&property.type_name)),
+                });
             }
         }
-
-        definition_str.push('}');
-        definition_str
+        fields.sort();
+        let template = RustStructTemplate {
+            name: extract_rust_name(&self.name).as_str(),
+            description: description.as_str(),
+            derivations,
+            fields,
+            imports: self
+                .get_required_modules()
+                .iter()
+                .map(|module| module.to_use())
+                .collect(),
+        }
+        .render()
+        .unwrap();
+        template
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct PrimitveDefinition {
+pub struct PrimitiveDefinition {
     pub name: String,
     pub primitive_type: TypeDefinition,
     pub description: Option<String>,
 }
 
-fn format_description(ident: &str, description: &str) -> String {
-    description
-        .lines()
-        .map(|line| format!("{}/// {}\n", ident, line))
-        .collect::<String>()
+fn is_private_name(name: &str) -> bool {
+    name.eq_ignore_ascii_case("type") || name.starts_with("r#")
 }
