@@ -1,4 +1,5 @@
 use std::{
+    collections::{HashMap, HashSet},
     fs::{self, File},
     io::Write,
     path::PathBuf,
@@ -7,13 +8,13 @@ use std::{
 use oas3::Spec;
 use object_definition::{
     generate_object, get_components_base_path, get_object_name, modules_to_string,
-    types::{ObjectDatabase, ObjectDefinition},
+    types::{ModuleInfo, ObjectDatabase, ObjectDefinition},
 };
 use tracing::{error, info, trace};
 
 use crate::utils::{
     config::Config,
-    name_mapping::{extract_rust_name, fix_rust_description},
+    name_mapping::{extract_rust_name, extract_rust_namespace, fix_rust_description},
 };
 
 use super::templates::rust::RustTypeTemplate;
@@ -115,6 +116,22 @@ pub fn generate_components(
     Ok(object_database)
 }
 
+pub fn write_filename(name: &PathBuf, content: &str) -> Result<(), String> {
+    fs::create_dir_all(&name.parent().unwrap()).expect("Creating objects dir failed");
+    let mut object_file = match File::create(name) {
+        Ok(file) => file,
+        Err(err) => {
+            return Err(format!(
+                "Unable to create file {} {}",
+                name.as_os_str().to_string_lossy(),
+                err.to_string()
+            ))
+        }
+    };
+    object_file.write(content.as_bytes()).unwrap();
+    Ok(())
+}
+
 pub fn write_object_database(
     output_dir: &PathBuf,
     object_database: &ObjectDatabase,
@@ -126,6 +143,8 @@ pub fn write_object_database(
     } else {
         output_dir.join("src").join("objects")
     };
+    let mut type_map: HashMap<String, (Vec<String>, Vec<String>)> =
+        std::collections::HashMap::new();
 
     fs::create_dir_all(&target_dir).expect("Creating objects dir failed");
 
@@ -138,55 +157,33 @@ pub fn write_object_database(
             "{}.rs",
             module_name.replace(".", "/").replace("::", "/")
         ));
-        fs::create_dir_all(&target_file.parent().unwrap()).expect("Creating objects dir failed");
-
-        let mut object_file = match File::create(target_file) {
-            Ok(file) => file,
-            Err(err) => {
-                error!(
-                    "Unable to create file {}.rs {}",
-                    module_name,
-                    err.to_string()
-                );
-                continue;
-            }
-        };
 
         match object_definition {
             ObjectDefinition::Struct(struct_definition) => {
-                object_file
-                    .write(modules_to_string(&struct_definition.get_required_modules()).as_bytes())
-                    .expect("Failed to write imports");
-                object_file.write("\n".as_bytes()).unwrap();
-
-                object_file
-                    .write(struct_definition.to_string(true, config).as_bytes())
-                    .unwrap();
+                let mut result = modules_to_string(&struct_definition.get_required_modules());
+                result.push_str("\n");
+                result.push_str(&struct_definition.to_string(true, config));
+                write_filename(&target_file, &result).unwrap();
             }
             ObjectDefinition::Enum(enum_definition) => {
-                object_file
-                    .write(modules_to_string(&enum_definition.get_required_modules()).as_bytes())
-                    .expect("Failed to write imports");
-                object_file.write("\n".as_bytes()).unwrap();
-
-                object_file
-                    .write(enum_definition.to_string(true).as_bytes())
-                    .unwrap();
+                let mut result = modules_to_string(&enum_definition.get_required_modules());
+                result.push_str("\n");
+                result.push_str(&enum_definition.to_string(true));
+                write_filename(&target_file, &result).unwrap();
             }
             ObjectDefinition::Primitive(primitive_definition) => {
-                object_file
-                    .write(
-                        modules_to_string(
-                            &primitive_definition
-                                .primitive_type
-                                .module
-                                .as_ref()
-                                .map_or(vec![], |module| vec![module]),
-                        )
-                        .as_bytes(),
-                    )
-                    .expect("Failed to write imports");
-                object_file.write("\n".as_bytes()).unwrap();
+                let mut imports = vec![];
+                let mut codes = vec![];
+                let namespace = extract_rust_namespace(&module_name);
+                if type_map.contains_key(&namespace) {
+                    let (import, code) = type_map.get(&namespace).unwrap();
+                    imports = import.clone();
+                    codes = code.clone();
+                }
+
+                if let Some(module) = &primitive_definition.primitive_type.module {
+                    imports.push(module.to_use());
+                }
 
                 let description = fix_rust_description(
                     "",
@@ -204,9 +201,19 @@ pub fn write_object_database(
                 .render()
                 .unwrap();
 
-                object_file.write(template.as_bytes()).unwrap();
+                codes.push(template);
+                type_map.insert(namespace, (imports, codes));
             }
         }
+    }
+
+    for (module_name, (imports, codes)) in type_map.iter() {
+        let target_file = target_dir.join(format!("{}/mod.rs", module_name.replace("::", "/")));
+
+        let mut result = imports.join("\n");
+        result.push_str("\n");
+        result.push_str(&codes.join("\n"));
+        write_filename(&target_file, &result).unwrap();
     }
 
     let target_mod = target_dir.join("mod.rs");

@@ -1,17 +1,15 @@
 {%- if description.len()>0 ~%}
 {{description}}
-{%~ endif -%}
-{% if derivations.len()>0 ~%}
+{%- endif %}
+{%- if derivations.len()>0 ~%}
 #[derive({% for i in derivations %}{{ i }}, {% endfor %})]
 {%~ endif -%}
 pub struct {{ name }} {
 {%- for field in fields %}
 {% if field.description.len()>0 +%}
-{{field.description}}{% endif %}
+    {{field.description}}{% endif %}
 {%- if field.annotations.len()>0 %}
-    {% for i in field.annotations %}{{ i }}
-    {% endfor -%}
+    {% for i in field.annotations %}{{ i }}{% endfor -%}
 {%- endif %}
-    {{ field.modifier }} {{ field.name }}: {{ field.typ }},
-{%- endfor %}
+    {{ field.modifier }} {{ field.name }}: {{ field.typ }},{%- endfor %}
 }

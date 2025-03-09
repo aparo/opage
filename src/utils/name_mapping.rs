@@ -261,6 +261,19 @@ pub fn extract_rust_name(name: &str) -> String {
     fix_private_name(parts[parts.len() - 1])
 }
 
+pub fn extract_rust_namespace(name: &str) -> String {
+    let parts = name.split("::").collect::<Vec<&str>>();
+    let mut namespace = String::new();
+    for pos in 0..parts.len() - 1 {
+        let part = parts[pos];
+        if pos > 0 {
+            namespace.push_str("::");
+        }
+        namespace.push_str(part);
+    }
+    namespace
+}
+
 fn fix_private_name(name: &str) -> String {
     if name.eq_ignore_ascii_case("type") {
         "r#type".to_string()
