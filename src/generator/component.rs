@@ -146,6 +146,8 @@ pub fn write_object_database(
     let mut type_map: HashMap<String, (Vec<String>, Vec<String>)> =
         std::collections::HashMap::new();
 
+    let mut mods_map: HashMap<String, Vec<String>> = HashMap::new();
+
     fs::create_dir_all(&target_dir).expect("Creating objects dir failed");
 
     for (_, object_definition) in object_database.iter() {
@@ -157,6 +159,7 @@ pub fn write_object_database(
             "{}.rs",
             module_name.replace(".", "/").replace("::", "/")
         ));
+        let namespace = extract_rust_namespace(&module_name);
 
         match object_definition {
             ObjectDefinition::Struct(struct_definition) => {
@@ -164,17 +167,35 @@ pub fn write_object_database(
                 result.push_str("\n");
                 result.push_str(&struct_definition.to_string(true, config));
                 write_filename(&target_file, &result).unwrap();
+                let mut mods = vec![];
+                if mods_map.contains_key(&namespace) {
+                    mods = mods_map.get(&namespace).unwrap().clone();
+                }
+                mods.push(format!(
+                    "pub mod {};",
+                    &target_file.file_stem().unwrap().to_str().unwrap()
+                ));
+                mods_map.insert(namespace, mods);
             }
             ObjectDefinition::Enum(enum_definition) => {
                 let mut result = modules_to_string(&enum_definition.get_required_modules());
                 result.push_str("\n");
                 result.push_str(&enum_definition.to_string(true));
                 write_filename(&target_file, &result).unwrap();
+                // we update the mods list
+                let mut mods = vec![];
+                if mods_map.contains_key(&namespace) {
+                    mods = mods_map.get(&namespace).unwrap().clone();
+                }
+                mods.push(format!(
+                    "pub mod {};",
+                    &target_file.file_stem().unwrap().to_str().unwrap()
+                ));
+                mods_map.insert(namespace, mods);
             }
             ObjectDefinition::Primitive(primitive_definition) => {
                 let mut imports = vec![];
                 let mut codes = vec![];
-                let namespace = extract_rust_namespace(&module_name);
                 if type_map.contains_key(&namespace) {
                     let (import, code) = type_map.get(&namespace).unwrap();
                     imports = import.clone();
@@ -206,14 +227,40 @@ pub fn write_object_database(
             }
         }
     }
+    let mut created_modules = vec![];
+
+    for (module_name, mods) in mods_map.iter() {
+        let mut mods = mods.clone();
+        let target_file = target_dir.join(format!("{}/mod.rs", module_name.replace("::", "/")));
+        mods.sort();
+        let mut result = mods.join("\n");
+
+        if type_map.contains_key(module_name) {
+            let (imports, codes) = type_map.get(module_name).unwrap();
+            let mut imports = imports.clone();
+            imports.sort();
+            result.push_str("\n");
+            result.push_str(&imports.join("\n"));
+            result.push_str("\n");
+            result.push_str(&codes.join("\n"));
+        }
+
+        write_filename(&target_file, &result).unwrap();
+        created_modules.push(module_name);
+    }
 
     for (module_name, (imports, codes)) in type_map.iter() {
+        if created_modules.contains(&module_name) {
+            continue;
+        }
         let target_file = target_dir.join(format!("{}/mod.rs", module_name.replace("::", "/")));
-
+        let mut imports = imports.clone();
+        imports.sort();
         let mut result = imports.join("\n");
         result.push_str("\n");
         result.push_str(&codes.join("\n"));
         write_filename(&target_file, &result).unwrap();
+        created_modules.push(module_name);
     }
 
     let target_mod = target_dir.join("mod.rs");
