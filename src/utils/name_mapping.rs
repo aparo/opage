@@ -231,7 +231,7 @@ pub fn convert_name(name: &str) -> String {
 }
 
 pub fn fix_struct_names(name: &str) -> String {
-    let mut name = name;
+    let mut name = name.replace(".", "::");
     if name.contains("___") {
         let parts: Vec<&str> = name.split("___").collect();
         let mut fixed_name = String::new();
@@ -245,12 +245,15 @@ pub fn fix_struct_names(name: &str) -> String {
         return fixed_name;
     }
     for pos in 0..9 {
-        if name.ends_with(format!(".{}", pos).as_str()) {
-            name = &name[..name.len() - 2];
+        if name.ends_with(format!("::{}", pos).as_str()) {
+            name = name[..name.len() - 2].to_owned();
             break;
         }
     }
-    name.to_owned()
+    if !name.contains("::") {
+        name = format!("common::{}", name.clone());
+    }
+    name
 }
 
 pub fn extract_rust_name(name: &str) -> String {

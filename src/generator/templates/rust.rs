@@ -1,5 +1,4 @@
 use askama::Template;
-use clap::builder::Str;
 
 #[derive(Template)]
 #[template(path = "rust/enum.j2", escape = "none")]

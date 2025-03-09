@@ -34,7 +34,9 @@ pub fn generate_components(
 
     for (component_name, object_ref) in &components.schemas {
         // fix for broken names
-        let component_name = component_name.replace("._common___", ".");
+        let component_name = component_name
+            .replace("._common___", ".")
+            .replace("._common___", ".");
         if config.ignore.component_ignored(&component_name) {
             info!("\"{}\" ignored", component_name);
             continue;
@@ -131,11 +133,8 @@ pub fn write_object_database(
 
     fs::create_dir_all(&target_dir).expect("Creating objects dir failed");
 
-    for (name, object_definition) in object_database.iter() {
+    for (_, object_definition) in object_database.iter() {
         let object_name = get_object_name(object_definition);
-        if object_name.contains("common") {
-            println!("inserting object: {:?}", object_name);
-        }
 
         let module_name = name_mapping.name_to_module_name(&object_name);
 
@@ -244,10 +243,12 @@ pub fn write_object_database(
 }
 
 fn validate_component_name(component_name: &str) -> String {
-    let result = component_name.replace("___", ".");
+    let mut result = component_name.replace("___", ".");
     if result.starts_with("_") {
-        result.trim_start_matches("_").to_owned()
-    } else {
-        result
+        result = result.trim_start_matches("_").to_owned()
     }
+    if !result.contains("common::") || !result.contains("common.") {
+        result = format!("common::{}", result);
+    }
+    result
 }
