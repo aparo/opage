@@ -96,9 +96,6 @@ impl ObjectDatabase {
     }
 
     pub fn insert(&mut self, key: &str, object: ObjectDefinition) {
-        if key.starts_with("common::cat") {
-            println!("Inserting object: {}", key);
-        }
         self.objects.insert(key.to_owned(), object);
     }
 

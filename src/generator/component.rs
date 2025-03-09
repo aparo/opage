@@ -121,10 +121,6 @@ pub fn write_object_database(
     config: &Config,
 ) -> Result<(), String> {
     let name_mapping = &config.name_mapping;
-    for item in object_database.iter() {
-        println!("{}", item.0);
-    }
-
     let target_dir = if config.use_scope {
         output_dir.join("src")
     } else {
@@ -243,11 +239,12 @@ pub fn write_object_database(
 }
 
 fn validate_component_name(component_name: &str) -> String {
-    let mut result = component_name.replace("___", ".");
+    let mut result = component_name.replace("___", ".").replace(".", "::");
     if result.starts_with("_") {
-        result = result.trim_start_matches("_").to_owned()
+        result = result.trim_start_matches("_").to_owned();
+        return result;
     }
-    if !result.contains("common::") || !result.contains("common.") {
+    if !result.contains("::") {
         result = format!("common::{}", result);
     }
     result
