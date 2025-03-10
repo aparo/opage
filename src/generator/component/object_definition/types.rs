@@ -200,6 +200,12 @@ impl StructDefinition {
         format!("{}::{}", self.package, self.name)
     }
 
+    pub fn all_properties_default(&self) -> bool {
+        self.properties
+            .iter()
+            .all(|(_, property)| !property.required || property.type_name.starts_with("Vec<"))
+    }
+
     pub fn get_required_modules(&self) -> Vec<&ModuleInfo> {
         let mut required_modules = self.used_modules.iter().collect::<Vec<&ModuleInfo>>();
         required_modules.append(
@@ -219,6 +225,10 @@ impl StructDefinition {
         if serializable {
             derivations.push("Serialize");
             derivations.push("Deserialize");
+        }
+        let has_default = self.all_properties_default();
+        if has_default {
+            derivations.push("Default");
         }
         let mut fields: Vec<Field> = vec![];
         for (_, property) in &self.properties {
@@ -245,6 +255,11 @@ impl StructDefinition {
                     serde_parts.push("default".to_string());
                     serde_parts.push("skip_serializing_if = \"Option::is_none\"".to_string());
                 } else {
+                    serde_parts.push("default".to_string());
+                }
+            }
+            if has_default {
+                if serde_parts.contains(&"default".to_string()) {
                     serde_parts.push("default".to_string());
                 }
             }

@@ -809,7 +809,7 @@ fn generate_query_parameter_code(
 
     let mut unroll_query_parameters_code = String::new();
     unroll_query_parameters_code += &format!(
-        "let {} request_query_parameters: Vec<(&str, String)> = vec![{}];\n",
+        "  let {} request_query_parameters: Vec<(&str, String)> = vec![{}];\n",
         match query_struct
             .properties
             .iter()
@@ -853,17 +853,17 @@ fn generate_query_parameter_code(
         .collect::<Vec<&PropertyDefinition>>()
     {
         unroll_query_parameters_code += &format!(
-            "if let Some(ref query_parameter) = {}.{} {{\n",
+            "  if let Some(ref query_parameter) = {}.{} {{\n",
             query_struct_variable_name, optional_property.name
         );
         if optional_property.type_name.starts_with("Vec<") {
             unroll_query_parameters_code += &format!(
-                "query_parameter.iter().for_each(|query_parameter_item| request_query_parameters.push((\"{}\", query_parameter_item.to_string())));\n",
+                "  query_parameter.iter().for_each(|query_parameter_item| request_query_parameters.push((\"{}\", query_parameter_item.to_string())));\n",
                 optional_property.real_name
             );
         } else {
             unroll_query_parameters_code += &format!(
-                "request_query_parameters.push((\"{}\", query_parameter.to_string()));\n",
+                "  request_query_parameters.push((\"{}\", query_parameter.to_string()));\n",
                 optional_property.real_name
             );
         }
