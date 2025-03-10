@@ -1,15 +1,13 @@
 pub mod generator;
 pub mod utils;
 
-use std::{fs::File, io::Write};
-
 use clap::Parser;
 use generator::{
-    cargo::generate_cargo_content,
     component::{
         generate_components, object_definition::types::ObjectDatabase, write_object_database,
     },
     paths::generate_paths,
+    templates::rust::populate_client_files,
 };
 use utils::config::Config;
 
@@ -84,29 +82,20 @@ fn main() {
     write_object_database(&output_dir, &mut object_database, &config)
         .expect("Write objects failed");
     // 4. Project setup
-    let lib_target_file = output_dir.join("src").join("lib.rs");
+    // let lib_target_file = output_dir.join("src").join("lib.rs");
 
-    let mut lib_file = File::create(lib_target_file).expect("Failed to create lib.rs");
+    // let mut lib_file = File::create(lib_target_file).expect("Failed to create lib.rs");
 
-    if object_database.len() > 0 {
-        lib_file
-            .write("pub mod objects;\n".to_string().as_bytes())
-            .unwrap();
-    }
+    // if object_database.len() > 0 {
+    //     lib_file
+    //         .write("pub mod objects;\n".to_string().as_bytes())
+    //         .unwrap();
+    // }
 
-    if generated_paths > 0 {
-        lib_file
-            .write("pub mod paths;\n".to_string().as_bytes())
-            .unwrap();
-    }
-
-    let cargo_target_file = output_dir.join("cargo.toml");
-    let mut cargo_file = File::create(cargo_target_file).expect("Failed to create Cargo.toml");
-    cargo_file
-        .write(
-            generate_cargo_content(&config.project_metadata)
-                .expect("Failed to generate Cargo.toml")
-                .as_bytes(),
-        )
-        .expect("Failed to write Cargo.toml");
+    // if generated_paths > 0 {
+    //     lib_file
+    //         .write("pub mod paths;\n".to_string().as_bytes())
+    //         .unwrap();
+    // }
+    populate_client_files(&output_dir, &config).expect("Failed to populate client files");
 }

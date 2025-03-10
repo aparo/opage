@@ -15,6 +15,7 @@ serde-aux = "4.6.0"
 oas3 = { path = "oas3-rs/crates/oas3" }
 askama = "0.12.1"
 derive_builder = "0.20.2"
+embed-file = "0.2.0"
 
 [workspace]
 members = ["oas3-rs/crates/oas3"]
