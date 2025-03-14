@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs::{self, File},
     io::Write,
     path::PathBuf,
@@ -8,7 +8,7 @@ use std::{
 use oas3::Spec;
 use object_definition::{
     generate_object, get_components_base_path, get_object_name, modules_to_string,
-    types::{ModuleInfo, ObjectDatabase, ObjectDefinition},
+    types::{ObjectDatabase, ObjectDefinition},
 };
 use tracing::{error, info, trace};
 
@@ -26,11 +26,11 @@ pub mod type_definition;
 pub fn generate_components(
     spec: &Spec,
     config: &Config,
-    mut object_database: ObjectDatabase,
-) -> Result<ObjectDatabase, String> {
+    object_database: &ObjectDatabase,
+) -> Result<(), String> {
     let components = match spec.components {
         Some(ref components) => components,
-        None => return Ok(object_database),
+        None => return Ok(()),
     };
 
     for (component_name, object_ref) in &components.schemas {
@@ -78,7 +78,7 @@ pub fn generate_components(
 
         let object_definition = match generate_object(
             spec,
-            &mut object_database,
+            &object_database,
             definition_path,
             &object_name,
             &resolved_object,
@@ -108,12 +108,12 @@ pub fn generate_components(
             }
             _ => {
                 trace!("Adding component/struct {} to database", object_name);
-                object_database.insert(&object_name.clone(), object_definition);
+                object_database.insert(object_name.clone(), object_definition);
             }
         }
     }
 
-    Ok(object_database)
+    Ok(())
 }
 
 pub fn write_filename(name: &PathBuf, content: &str) -> Result<(), String> {
@@ -150,7 +150,8 @@ pub fn write_object_database(
 
     fs::create_dir_all(&target_dir).expect("Creating objects dir failed");
 
-    for (_, object_definition) in object_database.iter() {
+    for item in object_database.iter() {
+        let object_definition = item.value();
         let object_name = get_object_name(object_definition);
 
         let module_name = name_mapping.name_to_module_name(&object_name);
@@ -276,11 +277,11 @@ pub fn write_object_database(
         }
     };
 
-    for (struct_name, _) in object_database.iter() {
+    for struct_name in object_database.iter().map(|x| x.key().clone()) {
         match object_mod_file.write(
             format!(
                 "pub mod {};\n",
-                name_mapping.name_to_module_name(struct_name)
+                name_mapping.name_to_module_name(&struct_name)
             )
             .to_string()
             .as_bytes(),

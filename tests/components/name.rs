@@ -12,10 +12,8 @@ fn title_of_component_used() {
 
     let spec = oas3::from_path(spec_file_path).expect("Failed to read spec");
     let config = Config::new();
-
-    let object_database = generate_components(&spec, &config, ObjectDatabase::new()).unwrap();
-    assert_eq!(
-        vec!["ValidName"],
-        object_database.keys().collect::<Vec<&String>>()
-    );
+    let object_database = ObjectDatabase::new();
+    generate_components(&spec, &config, &object_database).unwrap();
+    let names: Vec<String> = object_database.iter().map(|f| f.key().clone()).collect();
+    assert_eq!(vec!["ValidName"], names);
 }

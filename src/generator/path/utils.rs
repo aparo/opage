@@ -48,7 +48,7 @@ fn parse_json_data(
     definition_path: Vec<String>,
     name_mapping: &NameMapping,
     new_object_name: &str,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     json_schema_object_or_ref: &ObjectOrReference<ObjectSchema>,
 ) -> Result<Option<TypeDefinition>, String> {
     let is_json_object_empty = match json_schema_object_or_ref.resolve(spec) {
@@ -113,7 +113,7 @@ fn generate_json_content(
     spec: &Spec,
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     json_media_type: &MediaType,
     content_object_name: &str,
 ) -> Result<TransferMediaType, String> {
@@ -154,7 +154,7 @@ fn generate_content_type(
     spec: &Spec,
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     content_type: &str,
     media_type: &MediaType,
     content_object_name: &str,
@@ -175,7 +175,7 @@ fn generate_content_type(
 
 fn generated_content_types_from_content_map(
     spec: &Spec,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
     content: &BTreeMap<String, MediaType>,
@@ -209,7 +209,7 @@ fn generated_content_types_from_content_map(
 
 pub fn generate_request_body(
     spec: &Spec,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
     request_body: &ObjectOrReference<RequestBody>,
@@ -239,7 +239,7 @@ pub fn generate_request_body(
 
 pub fn generate_responses(
     spec: &Spec,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
     responses: &BTreeMap<String, Response>,

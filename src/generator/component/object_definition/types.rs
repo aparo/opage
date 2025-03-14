@@ -4,7 +4,9 @@ use crate::utils::{
     name_mapping::{extract_rust_name, fix_rust_description},
 };
 use askama::Template;
+use dashmap::DashMap;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModuleInfo {
@@ -74,51 +76,55 @@ pub struct EnumValue {
     pub value_type: TypeDefinition,
 }
 
+pub type ObjectDatabase = DashMap<String, ObjectDefinition>;
+
 // pub type ObjectDatabase = HashMap<String, ObjectDefinition>;
-#[derive(Clone, Debug)]
-pub struct ObjectDatabase {
-    objects: HashMap<String, ObjectDefinition>,
-}
+// #[derive(Clone, Debug)]
+// pub struct ObjectDatabase {
+//     objects: DashMap<String, ObjectDefinition>,
+// }
 
-impl ObjectDatabase {
-    pub fn new() -> Self {
-        ObjectDatabase {
-            objects: HashMap::new(),
-        }
-    }
+// impl ObjectDatabase {
+//     pub fn new() -> Self {
+//         ObjectDatabase {
+//             objects: DashMap::new(),
+//         }
+//     }
 
-    pub fn keys(&self) -> std::collections::hash_map::Keys<String, ObjectDefinition> {
-        self.objects.keys()
-    }
+//     pub fn keys(&self) -> Vec<String> {
+//         self.objects.iter().map(|(k)| k.key().clone()).collect()
+//     }
 
-    pub fn contains_key(&self, key: &str) -> bool {
-        self.objects.contains_key(key)
-    }
+//     pub fn contains_key(&self, key: &str) -> bool {
+//         self.objects.contains_key(key)
+//     }
 
-    pub fn insert(&mut self, key: &str, object: ObjectDefinition) {
-        self.objects.insert(key.to_owned(), object);
-    }
+//     pub fn insert(&mut self, key: &str, object: ObjectDefinition) {
+//         self.objects.insert(key.to_owned(), object);
+//     }
 
-    pub fn get(&self, id: &str) -> Option<&ObjectDefinition> {
-        self.objects.get(id)
-    }
+//     // pub fn get(&self, id: &str) -> Option<&ObjectDefinition> {
+//     //     let res = self.objects.get(id).as_deref();
+//     //     res.clone()
+//     // }
 
-    pub fn get_mut(&mut self, id: &str) -> Option<&mut ObjectDefinition> {
-        self.objects.get_mut(id)
-    }
+//     // pub fn get_mut(&mut self, id: &str) -> Option<&mut ObjectDefinition> {
+//     //     let mut items = self.objects.lock().unwrap();
+//     //     items.get_mut(id)
+//     // }
 
-    pub fn remove(&mut self, id: &str) -> Option<ObjectDefinition> {
-        self.objects.remove(id)
-    }
+//     // pub fn remove(&mut self, id: &str) -> Option<ObjectDefinition> {
+//     //     self.objects.remove(id)
+//     // }
 
-    pub fn iter(&self) -> std::collections::hash_map::Iter<String, ObjectDefinition> {
-        self.objects.iter()
-    }
+//     // pub fn iter(&self) -> std::collections::hash_map::Iter<String, ObjectDefinition> {
+//     //     self.objects.iter()
+//     // }
 
-    pub fn len(&self) -> usize {
-        self.objects.len()
-    }
-}
+//     pub fn len(&self) -> usize {
+//         self.objects.len()
+//     }
+// }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnumDefinition {

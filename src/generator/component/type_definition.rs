@@ -16,7 +16,7 @@ use super::{
 
 pub fn get_type_from_schema(
     spec: &Spec,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     definition_path: Vec<String>,
     object_schema: &ObjectSchema,
     object_variable_fallback_name: Option<&str>,
@@ -70,7 +70,7 @@ pub fn get_type_from_schema(
 
 pub fn get_type_from_any_type(
     spec: &Spec,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     definition_path: Vec<String>,
     object_schema: &ObjectSchema,
     object_variable_fallback_name: Option<&str>,
@@ -125,7 +125,7 @@ pub fn get_type_from_any_type(
 
 pub fn get_type_from_schema_type(
     spec: &Spec,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     definition_path: Vec<String>,
     schema_type: &SchemaTypeSet,
     object_schema: &ObjectSchema,

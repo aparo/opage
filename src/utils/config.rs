@@ -23,6 +23,8 @@ impl ProjectMetadata {
 pub struct Config {
     pub project_metadata: ProjectMetadata,
     pub name_mapping: NameMapping,
+    #[serde(default = "default_client_name")]
+    pub client_name: String,
     pub ignore: SpecIgnore,
     #[serde(default = "bool_true")]
     pub serde_skip_null: bool,
@@ -38,11 +40,16 @@ pub struct Config {
     pub use_scope: bool,
 }
 
+pub fn default_client_name() -> String {
+    "Client".to_string()
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
             project_metadata: ProjectMetadata::new(),
             name_mapping: NameMapping::new(),
+            client_name: default_client_name(),
             ignore: SpecIgnore::new(),
             serde_skip_empty_map: true,
             serde_skip_empty_vec: true,

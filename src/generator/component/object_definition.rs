@@ -54,7 +54,7 @@ pub fn is_object_empty(object_schema: &ObjectSchema) -> bool {
 
 pub fn generate_object(
     spec: &Spec,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     definition_path: Vec<String>,
     name: &str,
     object_schema: &ObjectSchema,
@@ -224,7 +224,7 @@ pub fn get_base_path_to_ref(ref_path: &str) -> Result<Vec<String>, String> {
 
 pub fn generate_enum_from_any(
     spec: &Spec,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     mut definition_path: Vec<String>,
     name: &str,
     object_schema: &ObjectSchema,
@@ -318,7 +318,7 @@ pub fn generate_enum_from_any(
 
 pub fn generate_enum_from_one_of(
     spec: &Spec,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     mut definition_path: Vec<String>,
     name: &str,
     object_schema: &ObjectSchema,
@@ -412,7 +412,7 @@ pub fn generate_enum_from_one_of(
 
 pub fn generate_struct(
     spec: &Spec,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     mut definition_path: Vec<String>,
     name: &str,
     object_schema: &ObjectSchema,
@@ -476,7 +476,7 @@ fn get_or_create_property(
     property_name: &String,
     property_ref: &ObjectOrReference<ObjectSchema>,
     required: bool,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     name_mapping: &NameMapping,
 ) -> Result<PropertyDefinition, String> {
     trace!("Creating property {}", property_name);
@@ -525,7 +525,7 @@ fn get_or_create_property(
 
 pub fn get_or_create_object(
     spec: &Spec,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     definition_path: Vec<String>,
     name: &str,
     property_ref: &ObjectSchema,
@@ -553,7 +553,7 @@ pub fn get_or_create_object(
     let name = name_mapping.extract_struct_name(&struct_name);
 
     object_database.insert(
-        &struct_name.clone(),
+        struct_name.clone(),
         ObjectDefinition::Struct(StructDefinition {
             package: package_name,
             used_modules: vec![],
@@ -575,7 +575,7 @@ pub fn get_or_create_object(
         Ok(created_struct) => {
             let name = get_object_name(&created_struct);
             trace!("Updating struct {} in database", name);
-            object_database.insert(&struct_name.clone(), created_struct.clone());
+            object_database.insert(struct_name.clone(), created_struct.clone());
             Ok(created_struct)
         }
         Err(err) => Err(format!("Failed to generate object: {}", err)),

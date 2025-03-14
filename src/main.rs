@@ -3,10 +3,8 @@ pub mod utils;
 
 use clap::Parser;
 use generator::{
-    component::{
-        generate_components, object_definition::types::ObjectDatabase, write_object_database,
-    },
-    paths::generate_paths,
+    component::{object_definition::types::ObjectDatabase, write_object_database},
+    generator::Generator,
     templates::rust::populate_client_files,
 };
 use utils::config::Config;
@@ -64,23 +62,12 @@ fn main() {
         None => Config::new(),
     };
 
-    // 2. Read spec
-    let mut object_database = ObjectDatabase::new();
-    let mut generated_paths = 0;
-    for spec_file_path in spec_file_paths {
-        let spec = oas3::from_path(spec_file_path).expect("Failed to read spec");
-        // 3. Generate Code
-        // 3.1 Components and database for type referencing
-        let odb = generate_components(&spec, &config, object_database).unwrap();
-        object_database = odb;
-        // 3.2 Generate paths requests
-        generated_paths += generate_paths(&output_dir, &spec, &mut object_database, &config)
-            .expect("Failed to generated paths");
-    }
+    let generator = Generator::new(config, output_dir, spec_file_paths);
 
-    // 3.3 Write all registered objects to individual type definitions
-    write_object_database(&output_dir, &mut object_database, &config)
-        .expect("Write objects failed");
+    generator.generate_paths();
+    generator.generate_objects();
+    generator.populate_client_files();
+
     // 4. Project setup
     // let lib_target_file = output_dir.join("src").join("lib.rs");
 
@@ -97,5 +84,4 @@ fn main() {
     //         .write("pub mod paths;\n".to_string().as_bytes())
     //         .unwrap();
     // }
-    populate_client_files(&output_dir, &config).expect("Failed to populate client files");
 }

@@ -75,6 +75,10 @@ pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<()
             embed_file::embed_string!("embedded/rust/credentials.rs"),
             "src/credentials.rs",
         ),
+        (
+            embed_file::embed_string!("embedded/rust/client.rs"),
+            "src/client.rs",
+        ),
     ];
 
     for (content, file_name) in files {

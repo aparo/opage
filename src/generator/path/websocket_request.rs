@@ -61,7 +61,7 @@ pub fn generate_operation(
     name_mapping: &NameMapping,
     path: &str,
     operation: &Operation,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     config: &crate::utils::config::Config,
 ) -> Result<String, String> {
     let operation_definition_path: Vec<String> = vec![path.to_owned()];

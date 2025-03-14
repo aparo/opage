@@ -28,7 +28,7 @@ pub fn generate_operation(
     method: &reqwest::Method,
     path: &str,
     operation: &Operation,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     config: &Config,
 ) -> Result<String, String> {
     trace!("Generating {} {}", method.as_str(), path);
@@ -730,7 +730,7 @@ fn generate_query_parameter_code(
     operation: &Operation,
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
-    object_database: &mut ObjectDatabase,
+    object_database: &ObjectDatabase,
     function_name: &str,
 ) -> Result<QueryParametersCode, String> {
     trace!("Generating query params");
