@@ -13,6 +13,7 @@ use crate::{
         type_definition::get_type_from_schema,
     },
     utils::name_mapping::NameMapping,
+    GeneratorError,
 };
 use oas3::{
     spec::{FromRef, ObjectOrReference, ObjectSchema, Operation, ParameterIn},
@@ -65,25 +66,27 @@ pub fn generate_operation(
     object_database: &ObjectDatabase,
     path_database: &PathDatabase,
     config: &crate::utils::config::Config,
-) -> Result<String, String> {
+) -> Result<String, GeneratorError> {
     let operation_definition_path: Vec<String> = vec![path.to_owned()];
 
     let function_name = match operation.operation_id {
-        Some(ref operation_id) => name_mapping.name_to_module_name(operation_id),
-        None => return Err("No operation_id found".to_owned()),
+        Some(ref operation_id) => name_mapping.name_to_module_name(operation_id, config.use_scope),
+        None => {
+            return Err(GeneratorError::ParseError(
+                "No operation_id found".to_owned(),
+            ))
+        }
     };
 
-    let response_entities = match generate_responses(
+    let response_entities = generate_responses(
         spec,
         object_database,
         &operation_definition_path,
         name_mapping,
         &operation.responses(spec),
         &function_name,
-    ) {
-        Ok(response_entities) => response_entities,
-        Err(err) => return Err(err),
-    };
+        config,
+    )?;
 
     let socket_transferred_media_type = match response_entities.get("200") {
         Some(ok_response) => {
@@ -95,18 +98,26 @@ pub fn generate_operation(
 
             match socket_transferred_media_type {
                 Some(socket_transferred_media_type) => socket_transferred_media_type,
-                None => return Err("Transfer type missing".to_owned()),
+                None => {
+                    return Err(GeneratorError::InvalidValueError(
+                        "Transfer type missing".to_owned(),
+                    ))
+                }
             }
         }
-        None => return Err("No OK response found".to_owned()),
+        None => {
+            return Err(GeneratorError::ParseError(
+                "No OK response found".to_owned(),
+            ))
+        }
     };
 
     let socket_transfer_type_definition = match socket_transferred_media_type {
         TransferMediaType::ApplicationJson(type_definition) => match type_definition {
             Some(type_definition) => type_definition,
             None => {
-                return Err(format!(
-                    "Websocket with empty response body is not supported"
+                return Err(GeneratorError::UnsupportedError(
+                    "Websocket with empty response body".to_owned(),
                 ))
             }
         },
@@ -242,7 +253,12 @@ pub fn generate_operation(
     for parameter_ref in &operation.parameters {
         let parameter = match parameter_ref.resolve(spec) {
             Ok(parameter) => parameter,
-            Err(err) => return Err(format!("Failed to resolve parameter {}", err.to_string())),
+            Err(err) => {
+                return Err(GeneratorError::ResolveError(format!(
+                    "Failed to resolve parameter {}",
+                    err.to_string()
+                )))
+            }
         };
         if parameter.location != ParameterIn::Query {
             continue;
@@ -257,6 +273,7 @@ pub fn generate_operation(
                     &object_schema,
                     Some(&parameter.name),
                     name_mapping,
+                    config,
                 ),
                 ObjectOrReference::Ref { ref_path } => {
                     match ObjectSchema::from_ref(spec, &ref_path) {
@@ -267,18 +284,24 @@ pub fn generate_operation(
                             &object_schema,
                             Some(&parameter.name),
                             name_mapping,
+                            config,
                         ),
                         Err(err) => {
-                            return Err(format!(
+                            return Err(GeneratorError::ResolveError(format!(
                                 "Failed to resolve parameter {} {}",
                                 parameter.name,
                                 err.to_string()
-                            ))
+                            )))
                         }
                     }
                 }
             },
-            None => return Err(format!("Parameter {} has no schema", parameter.name)),
+            None => {
+                return Err(GeneratorError::UnsupportedPropertyError(
+                    parameter.name.clone(),
+                    format!("Parameter {} has no schema", parameter.name),
+                ))
+            }
         };
 
         let _ = match parameter_type {
@@ -323,12 +346,13 @@ pub fn generate_operation(
                 name_mapping,
                 request_body,
                 &function_name,
+                config,
             ) {
                 Ok(request_body) => Some(request_body),
                 Err(err) => {
-                    return Err(format!(
-                        "Failed to generated request body {}",
-                        err.to_string()
+                    return Err(GeneratorError::CodeGenerationError(
+                        "request body".to_string(),
+                        err.to_string(),
                     ))
                 }
             }

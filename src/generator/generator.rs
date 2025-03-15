@@ -101,13 +101,7 @@ impl Generator {
             }
 
             for operation in operations {
-                match self.write_operation_to_file(
-                    spec,
-                    &operation.0,
-                    &name,
-                    operation.1,
-                    &target_dir,
-                ) {
+                match self.generate_path_code(spec, &operation.0, &name, operation.1, &target_dir) {
                     Ok(operation_id) => {
                         mods_to_create.push(operation_id.clone());
                         ()
@@ -133,7 +127,7 @@ impl Generator {
         Ok(generated_path_count)
     }
 
-    fn write_operation_to_file(
+    fn generate_path_code(
         &self,
         spec: &Spec,
         method: &reqwest::Method,
@@ -142,7 +136,10 @@ impl Generator {
         output_path: &PathBuf,
     ) -> Result<String, GeneratorError> {
         let operation_id = match operation.operation_id {
-            Some(ref operation_id) => &self.config.name_mapping.name_to_module_name(operation_id),
+            Some(ref operation_id) => &self
+                .config
+                .name_mapping
+                .name_to_module_name(operation_id, self.config.use_scope),
             None => {
                 return Err(GeneratorError::MissingIdError(
                     path.to_string(),
@@ -177,7 +174,7 @@ impl Generator {
                 Err(err) => {
                     return Err(GeneratorError::CodeGenerationError(
                         "websocket".to_owned(),
-                        err,
+                        err.to_string(),
                     ))
                 }
             },
@@ -192,12 +189,7 @@ impl Generator {
                 &self.config,
             ) {
                 Ok(request_code) => request_code,
-                Err(err) => {
-                    return Err(GeneratorError::CodeGenerationError(
-                        "default request".to_owned(),
-                        err,
-                    ))
-                }
+                Err(err) => return Err(err),
             },
         };
 

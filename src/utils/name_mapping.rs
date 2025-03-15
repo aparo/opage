@@ -3,6 +3,8 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use std::collections::HashMap;
 
+use crate::GeneratorError;
+
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 pub struct NameMapping {
     #[serde(default)]
@@ -112,7 +114,7 @@ impl NameMapping {
         }
     }
 
-    pub fn name_to_module_name(&self, name: &str) -> String {
+    pub fn name_to_module_name(&self, name: &str, use_scope: bool) -> String {
         let mut name = name;
         for pos in 0..9 {
             if name.ends_with(format!(".{}", pos).as_str()) {
@@ -125,16 +127,23 @@ impl NameMapping {
         match self.module_mapping.get(&converted_name) {
             Some(name) => name.clone(),
             None => {
-                if converted_name.contains(".") || converted_name.contains("::") {
-                    converted_name
+                if use_scope {
+                    if converted_name.contains(".") || converted_name.contains("::") {
+                        converted_name
+                    } else {
+                        format!("common.{}", converted_name)
+                    }
                 } else {
-                    format!("common.{}", converted_name)
+                    converted_name
                 }
             }
         }
     }
 
-    pub fn status_code_to_canonical_name(&self, status_code: StatusCode) -> Result<String, String> {
+    pub fn status_code_to_canonical_name(
+        &self,
+        status_code: StatusCode,
+    ) -> Result<String, GeneratorError> {
         if let Some(canonical_name) = self.status_code_mapping.get(status_code.as_str()) {
             return Ok(canonical_name.clone());
         }
@@ -142,9 +151,9 @@ impl NameMapping {
         match status_code.canonical_reason() {
             Some(canonical_status_code) => Ok(canonical_status_code.to_owned()),
             None => {
-                return Err(format!(
-                    "Failed to get canonical status code {}",
-                    status_code
+                return Err(GeneratorError::StatusCodeError(
+                    status_code.to_string(),
+                    "Failed to get canonical status code".to_owned(),
                 ))
             }
         }

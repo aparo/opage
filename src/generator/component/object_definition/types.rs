@@ -284,8 +284,23 @@ fn is_private_name(name: &str) -> bool {
 pub struct PathDefinition {
     pub package: String,
     pub name: String,
+    pub response_name: String,
     pub used_modules: Vec<ModuleInfo>,
     pub properties: HashMap<String, PropertyDefinition>,
     pub local_objects: HashMap<String, Box<ObjectDefinition>>,
     pub description: Option<String>,
+}
+
+impl Default for PathDefinition {
+    fn default() -> Self {
+        PathDefinition {
+            package: "".to_string(),
+            name: "".to_string(),
+            response_name: "".to_string(),
+            used_modules: vec![],
+            properties: HashMap::new(),
+            local_objects: HashMap::new(),
+            description: None,
+        }
+    }
 }

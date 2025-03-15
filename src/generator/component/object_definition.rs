@@ -10,7 +10,13 @@ use types::{
     PropertyDefinition, StructDefinition,
 };
 
-use crate::utils::name_mapping::NameMapping;
+use crate::{
+    utils::{
+        config::{self, Config},
+        name_mapping::NameMapping,
+    },
+    GeneratorError,
+};
 
 use super::{type_definition::get_type_from_schema, ObjectDatabase};
 pub mod types;
@@ -59,9 +65,12 @@ pub fn generate_object(
     name: &str,
     object_schema: &ObjectSchema,
     name_mapping: &NameMapping,
-) -> Result<ObjectDefinition, String> {
+    config: &Config,
+) -> Result<ObjectDefinition, GeneratorError> {
     if is_object_empty(object_schema) {
-        return Err("Object is empty".to_string());
+        return Err(GeneratorError::InvalidValueError(
+            "Object is empty".to_string(),
+        ));
     }
 
     if object_schema.any_of.len() > 0 {
@@ -72,6 +81,7 @@ pub fn generate_object(
             name,
             object_schema,
             name_mapping,
+            config,
         );
     }
 
@@ -83,6 +93,7 @@ pub fn generate_object(
             name,
             object_schema,
             name_mapping,
+            config,
         );
     }
 
@@ -100,6 +111,7 @@ pub fn generate_object(
                 name,
                 object_schema,
                 name_mapping,
+                config,
             ),
             _ => match get_type_from_schema(
                 spec,
@@ -108,6 +120,7 @@ pub fn generate_object(
                 object_schema,
                 Some(name),
                 name_mapping,
+                config,
             ) {
                 Ok(type_definition) => Ok(ObjectDefinition::Primitive(PrimitiveDefinition {
                     name: name.to_owned(),
@@ -117,7 +130,9 @@ pub fn generate_object(
                 Err(err) => Err(err),
             },
         },
-        SchemaTypeSet::Multiple(_) => Err(format!("Multiple types are not supported")),
+        SchemaTypeSet::Multiple(_) => Err(GeneratorError::UnsupportedError(
+            "Multiple types".to_string(),
+        )),
     }
 }
 
@@ -138,14 +153,11 @@ pub fn get_object_or_ref_struct_name(
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
     object_or_reference: &ObjectOrReference<ObjectSchema>,
-) -> Result<(Vec<String>, String, Option<String>), String> {
+) -> Result<(Vec<String>, String, Option<String>), GeneratorError> {
     // last parameter is the description
     let object_schema = match object_or_reference {
         ObjectOrReference::Ref { ref_path } => {
-            let ref_definition_path = match get_base_path_to_ref(ref_path) {
-                Ok(ref_path) => ref_path,
-                Err(err) => return Err(err),
-            };
+            let ref_definition_path = get_base_path_to_ref(ref_path)?;
 
             match object_or_reference.resolve(spec) {
                 Ok(object_schema) => match object_schema.title {
@@ -160,10 +172,10 @@ pub fn get_object_or_ref_struct_name(
                         let path_name = match ref_path.split("/").last() {
                             Some(last_name) => last_name,
                             None => {
-                                return Err(format!(
+                                return Err(GeneratorError::ResolveError(format!(
                                     "Unable to retrieve name from ref path {}",
                                     ref_path
-                                ))
+                                )))
                             }
                         };
 
@@ -175,7 +187,12 @@ pub fn get_object_or_ref_struct_name(
                     }
                 },
 
-                Err(err) => return Err(format!("Failed to resolve object {}", err.to_string())),
+                Err(err) => {
+                    return Err(GeneratorError::ResolveError(format!(
+                        "Failed to resolve object {}",
+                        err.to_string()
+                    )))
+                }
             }
         }
         ObjectOrReference::Object(object_schema) => object_schema,
@@ -206,16 +223,22 @@ pub fn get_object_or_ref_struct_name(
         ));
     }
 
-    Err(format!("Unable to determine object name"))
+    Err(GeneratorError::CodeGenerationError(
+        String::new(),
+        format!(": Unable to determine object name"),
+    ))
 }
 
-pub fn get_base_path_to_ref(ref_path: &str) -> Result<Vec<String>, String> {
+pub fn get_base_path_to_ref(ref_path: &str) -> Result<Vec<String>, GeneratorError> {
     let mut path_segments = ref_path
         .split("/")
         .map(|segment| segment.to_owned())
         .collect::<Vec<String>>();
     if path_segments.len() < 4 {
-        return Err(format!("Expected 4 path segments in {}", ref_path));
+        return Err(GeneratorError::CodeGenerationError(
+            String::new(),
+            format!(": Expected 4 path segments in {}", ref_path),
+        ));
     }
     // Remove component name
     path_segments.pop();
@@ -229,7 +252,8 @@ pub fn generate_enum_from_any(
     name: &str,
     object_schema: &ObjectSchema,
     name_mapping: &NameMapping,
-) -> Result<ObjectDefinition, String> {
+    config: &Config,
+) -> Result<ObjectDefinition, GeneratorError> {
     trace!("Generating enum");
     let mut enum_definition = EnumDefinition {
         name: name_mapping
@@ -285,10 +309,10 @@ pub fn generate_enum_from_any(
                 &format!("{}Value", object_type_struct_name),
             ),
             Err(err) => {
-                return Err(format!(
+                return Err(GeneratorError::InvalidValueError(format!(
                     "{} Anonymous enum value are not supported \"{}\"",
                     name, err
-                ))
+                )))
             }
         };
 
@@ -301,6 +325,7 @@ pub fn generate_enum_from_any(
                 &any_object,
                 Some(&object_type_enum_name),
                 name_mapping,
+                config,
             ) {
                 Ok(type_definition) => EnumValue {
                     name: object_type_enum_name,
@@ -323,7 +348,8 @@ pub fn generate_enum_from_one_of(
     name: &str,
     object_schema: &ObjectSchema,
     name_mapping: &NameMapping,
-) -> Result<ObjectDefinition, String> {
+    config: &Config,
+) -> Result<ObjectDefinition, GeneratorError> {
     trace!("Generating enum");
     let mut enum_definition = EnumDefinition {
         name: name_mapping
@@ -379,10 +405,10 @@ pub fn generate_enum_from_one_of(
                 &format!("{}Value", object_type_struct_name),
             ),
             Err(err) => {
-                return Err(format!(
+                return Err(GeneratorError::UnsupportedError(format!(
                     "{} Anonymous enum value are not supported \"{}\"",
                     name, err
-                ))
+                )))
             }
         };
 
@@ -395,6 +421,7 @@ pub fn generate_enum_from_one_of(
                 &one_of_object,
                 Some(&object_type_enum_name),
                 name_mapping,
+                config,
             ) {
                 Ok(type_definition) => EnumValue {
                     name: object_type_enum_name,
@@ -417,7 +444,8 @@ pub fn generate_struct(
     name: &str,
     object_schema: &ObjectSchema,
     name_mapping: &NameMapping,
-) -> Result<ObjectDefinition, String> {
+    config: &Config,
+) -> Result<ObjectDefinition, GeneratorError> {
     let full_name = name_mapping.name_to_struct_name(&definition_path, name);
     trace!("Generating struct: {}", full_name);
     let struct_name = name_mapping.extract_struct_name(&full_name);
@@ -455,6 +483,7 @@ pub fn generate_struct(
             property_required,
             object_database,
             name_mapping,
+            config,
         ) {
             Err(err) => {
                 info!("{} {}", name, err);
@@ -478,16 +507,17 @@ fn get_or_create_property(
     required: bool,
     object_database: &ObjectDatabase,
     name_mapping: &NameMapping,
-) -> Result<PropertyDefinition, String> {
+    config: &Config,
+) -> Result<PropertyDefinition, GeneratorError> {
     trace!("Creating property {}", property_name);
     let property = match property_ref.resolve(spec) {
         Ok(property) => property,
         Err(err) => {
-            return Err(format!(
+            return Err(GeneratorError::ResolveError(format!(
                 "Failed to resolve {} {}",
                 property_name,
                 err.to_string()
-            ))
+            )))
         }
     };
 
@@ -495,9 +525,9 @@ fn get_or_create_property(
         match get_object_or_ref_struct_name(spec, &definition_path, name_mapping, property_ref) {
             Ok(type_naming_data) => type_naming_data,
             Err(err) => {
-                return Err(format!(
-                    "Unable to determine property name of {} {}",
-                    property_name, err
+                return Err(GeneratorError::UnsupportedPropertyError(
+                    property_name.to_string(),
+                    err.to_string(),
                 ))
             }
         };
@@ -509,6 +539,7 @@ fn get_or_create_property(
         &property,
         Some(&property_type_name),
         name_mapping,
+        config,
     ) {
         Ok(property_type_definition) => Ok(PropertyDefinition {
             type_name: name_mapping
@@ -530,7 +561,8 @@ pub fn get_or_create_object(
     name: &str,
     property_ref: &ObjectSchema,
     name_mapping: &NameMapping,
-) -> Result<ObjectDefinition, String> {
+    config: &Config,
+) -> Result<ObjectDefinition, GeneratorError> {
     if let Some(object_in_database) =
         object_database.get(&name_mapping.name_to_struct_name(&definition_path, name))
     {
@@ -542,10 +574,7 @@ pub fn get_or_create_object(
     // otherwise create the same object every time we want to resolve the current one
     let struct_name = name_mapping.name_to_struct_name(&definition_path, name);
     if object_database.contains_key(&struct_name) {
-        return Err(format!(
-            "ObjectDatabase already contains an object {}",
-            struct_name
-        ));
+        return Err(GeneratorError::ObjectDatabaseDuplicateError(struct_name));
     }
 
     trace!("Adding struct {} to database", struct_name);
@@ -571,6 +600,7 @@ pub fn get_or_create_object(
         &struct_name,
         property_ref,
         name_mapping,
+        config,
     ) {
         Ok(created_struct) => {
             let name = get_object_name(&created_struct);
@@ -578,6 +608,6 @@ pub fn get_or_create_object(
             object_database.insert(struct_name.clone(), created_struct.clone());
             Ok(created_struct)
         }
-        Err(err) => Err(format!("Failed to generate object: {}", err)),
+        Err(err) => Err(err),
     }
 }

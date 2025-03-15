@@ -86,6 +86,7 @@ pub fn generate_components(
             &object_name,
             &resolved_object,
             &config.name_mapping,
+            config,
         ) {
             Ok(object_definition) => object_definition,
             Err(err) => {
@@ -141,7 +142,7 @@ pub fn write_object_database(
         let object_definition = item.value();
         let object_name = get_object_name(object_definition);
 
-        let module_name = name_mapping.name_to_module_name(&object_name);
+        let module_name = name_mapping.name_to_module_name(&object_name, config.use_scope);
 
         let target_file = target_dir.join(format!(
             "{}.rs",
@@ -258,7 +259,7 @@ pub fn write_object_database(
         mods.push(
             format!(
                 "pub mod {};\n",
-                name_mapping.name_to_module_name(&struct_name)
+                name_mapping.name_to_module_name(&struct_name, config.use_scope)
             )
             .to_string(),
         )

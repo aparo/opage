@@ -12,12 +12,14 @@ use crate::{
         object_definition::{
             oas3_type_to_string,
             types::{
-                ModuleInfo, ObjectDatabase, PathDatabase, PropertyDefinition, StructDefinition,
+                ModuleInfo, ObjectDatabase, PathDatabase, PathDefinition, PropertyDefinition,
+                StructDefinition,
             },
         },
         type_definition::get_type_from_schema,
     },
     utils::{config::Config, name_mapping::NameMapping},
+    GeneratorError,
 };
 
 use super::utils::{
@@ -33,36 +35,36 @@ pub fn generate_operation(
     object_database: &ObjectDatabase,
     path_database: &PathDatabase,
     config: &Config,
-) -> Result<String, String> {
+) -> Result<String, GeneratorError> {
     trace!("Generating {} {}", method.as_str(), path);
     let operation_definition_path: Vec<String> = vec![path.to_owned()];
     let function_name = match operation.operation_id {
-        Some(ref operation_id) => name_mapping.name_to_module_name(operation_id),
-        None => return Err("No operation_id found".to_owned()),
+        Some(ref operation_id) => name_mapping.name_to_module_name(operation_id, config.use_scope),
+        None => {
+            return Err(GeneratorError::MissingIdError(
+                "operation_id".to_string(),
+                path.to_owned(),
+            ))
+        }
     };
 
-    let response_entities = match generate_responses(
+    let response_entities = generate_responses(
         spec,
         object_database,
         &operation_definition_path,
         name_mapping,
         &operation.responses(spec),
         &function_name,
-    ) {
-        Ok(response_entities) => response_entities,
-        Err(err) => return Err(err),
-    };
+        config,
+    )?;
 
     // Path parameters
-    let path_parameter_code = match generate_path_parameter_code(
+    let path_parameter_code = generate_path_parameter_code(
         &operation_definition_path,
         name_mapping,
         &function_name,
         path,
-    ) {
-        Ok(path_parameter_code) => path_parameter_code,
-        Err(err) => return Err(err),
-    };
+    )?;
 
     // Response enum
     trace!("Generating response enum");
@@ -187,9 +189,9 @@ pub fn generate_operation(
                     ),
                 },
                 None => {
-                    return Err(format!(
-                        "Failed to retrieve first response media type of status {}",
-                        status_code
+                    return Err(GeneratorError::StatusCodeError(
+                        "Failed to retrieve first response media type of status".to_owned(),
+                        status_code.to_string(),
                     ))
                 }
             },
@@ -208,17 +210,15 @@ pub fn generate_operation(
     response_enum_source_code += "}\n";
 
     // Query params
-    let query_parameter_code = match generate_query_parameter_code(
+    let query_parameter_code = generate_query_parameter_code(
         spec,
         operation,
         &operation_definition_path,
         name_mapping,
         object_database,
         &function_name,
-    ) {
-        Ok(query_parameter_code) => query_parameter_code,
-        Err(err) => return Err(err),
-    };
+        config,
+    )?;
 
     // Request Body
     trace!("Generating request body");
@@ -231,12 +231,13 @@ pub fn generate_operation(
                 name_mapping,
                 request_body,
                 &function_name,
+                config,
             ) {
                 Ok(request_body) => Some(request_body),
                 Err(err) => {
-                    return Err(format!(
-                        "Failed to generated request body {}",
-                        err.to_string()
+                    return Err(GeneratorError::CodeGenerationError(
+                        "request body".to_string(),
+                        err.to_string(),
                     ))
                 }
             }
@@ -651,7 +652,7 @@ fn generate_path_parameter_code(
     name_mapping: &NameMapping,
     function_name: &str,
     path: &str,
-) -> Result<PathParameterCode, String> {
+) -> Result<PathParameterCode, GeneratorError> {
     trace!("Generating path parameters");
     let path_parameters_struct_name = name_mapping.name_to_struct_name(
         &definition_path,
@@ -735,7 +736,8 @@ fn generate_query_parameter_code(
     name_mapping: &NameMapping,
     object_database: &ObjectDatabase,
     function_name: &str,
-) -> Result<QueryParametersCode, String> {
+    config: &Config,
+) -> Result<QueryParametersCode, GeneratorError> {
     trace!("Generating query params");
     let mapping_name = name_mapping.name_to_struct_name(
         &definition_path,
@@ -762,7 +764,12 @@ fn generate_query_parameter_code(
     for parameter_ref in &operation.parameters {
         let parameter = match parameter_ref.resolve(spec) {
             Ok(parameter) => parameter,
-            Err(err) => return Err(format!("Failed to resolve parameter {}", err.to_string())),
+            Err(err) => {
+                return Err(GeneratorError::ParameterError(
+                    "Failed to resolve parameter".to_owned(),
+                    err.to_string(),
+                ))
+            }
         };
         if parameter.location != ParameterIn::Query {
             continue;
@@ -777,16 +784,21 @@ fn generate_query_parameter_code(
                     &object_schema,
                     Some(&parameter.name),
                     name_mapping,
+                    config,
                 ),
                 Err(err) => {
-                    return Err(format!(
-                        "Failed to resolve parameter {} {}",
-                        parameter.name,
-                        err.to_string()
+                    return Err(GeneratorError::ParameterError(
+                        format!("Failed to resolve parameter {}", parameter.name),
+                        err.to_string(),
                     ))
                 }
             },
-            None => return Err(format!("Parameter {} has no schema", parameter.name)),
+            None => {
+                return Err(GeneratorError::ParameterError(
+                    "Parameter has no schema:".to_string(),
+                    parameter.name,
+                ))
+            }
         };
 
         let _ = match parameter_type {
@@ -953,9 +965,11 @@ fn generate_multi_request_type_functions(
             )),
         }
 
+        let function_name = name_mapping.extract_function_name(&content_function_name);
+
         request_source_code += &format!(
             "pub async fn {}({}) -> Result<{}, reqwest::Error> {{\n",
-            name_mapping.extract_function_name(&content_function_name),
+            &function_name,
             function_parameters.join(", "),
             response_enum_name,
         );
@@ -1014,6 +1028,16 @@ fn generate_multi_request_type_functions(
             request_function_call_parameters.join(",")
         );
         request_source_code += "}\n";
+
+        let mut path_definition = PathDefinition {
+            package: name_mapping.extract_package_name(&content_function_name),
+            name: name_mapping.extract_struct_name(&content_function_name),
+            used_modules: module_imports.clone(),
+            local_objects: HashMap::new(),
+            properties: HashMap::new(),
+            description: None,
+            ..Default::default()
+        };
     }
 
     Some(request_source_code)

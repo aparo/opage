@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    ascii::AsciiExt,
+    collections::{BTreeMap, HashMap},
+};
 
 use oas3::{
     spec::{MediaType, ObjectOrReference, ObjectSchema, RequestBody, Response},
@@ -15,7 +18,11 @@ use crate::{
         },
         type_definition::get_type_from_schema,
     },
-    utils::name_mapping::NameMapping,
+    utils::{
+        config::{self, Config},
+        name_mapping::NameMapping,
+    },
+    GeneratorError,
 };
 
 type ContentTypeValue = String;
@@ -50,14 +57,15 @@ fn parse_json_data(
     new_object_name: &str,
     object_database: &ObjectDatabase,
     json_schema_object_or_ref: &ObjectOrReference<ObjectSchema>,
-) -> Result<Option<TypeDefinition>, String> {
+    config: &Config,
+) -> Result<Option<TypeDefinition>, GeneratorError> {
     let is_json_object_empty = match json_schema_object_or_ref.resolve(spec) {
         Ok(schema_object) => is_object_empty(&schema_object),
         Err(err) => {
-            return Err(format!(
+            return Err(GeneratorError::ResolveError(format!(
                 "Failed to resolve json response {}",
                 err.to_string()
-            ));
+            )));
         }
     };
 
@@ -76,19 +84,14 @@ fn parse_json_data(
                 module: Some(ModuleInfo {
                     path: format!(
                         "crate::objects::{}",
-                        name_mapping.name_to_module_name(&object_name)
+                        name_mapping.name_to_module_name(&object_name, config.use_scope)
                     ),
                     name: object_name.clone(),
                 }),
                 name: object_name.clone(),
                 description,
             }),
-            Err(err) => {
-                return Err(format!(
-                    "Unable to determine response type ref name {}",
-                    err
-                ))
-            }
+            Err(err) => return Err(err),
         },
         ObjectOrReference::Object(object_schema) => match get_type_from_schema(
             spec,
@@ -97,6 +100,7 @@ fn parse_json_data(
             &object_schema,
             Some(new_object_name),
             name_mapping,
+            config,
         ) {
             Ok(type_definition) => Some(type_definition),
             Err(err) => return Err(err),
@@ -105,7 +109,12 @@ fn parse_json_data(
 
     match json_object_definition_opt {
         Some(json_object_definition) => Ok(Some(json_object_definition)),
-        None => return Err(format!("JsonObjectName not found")),
+        None => {
+            return Err(GeneratorError::ParameterError(
+                "JsonObjectName not found".to_owned(),
+                String::new(),
+            ))
+        }
     }
 }
 
@@ -116,23 +125,26 @@ fn generate_json_content(
     object_database: &ObjectDatabase,
     json_media_type: &MediaType,
     content_object_name: &str,
-) -> Result<TransferMediaType, String> {
+    config: &Config,
+) -> Result<TransferMediaType, GeneratorError> {
     let json_schema_object_or_ref = match json_media_type.schema {
         Some(ref schema) => schema,
-        None => return Err(format!("Failed to parse response json data",)),
+        None => {
+            return Err(GeneratorError::ParseError(
+                "Failed to parse response json data".to_owned(),
+            ))
+        }
     };
 
-    let json_object = match parse_json_data(
+    let json_object = parse_json_data(
         spec,
         definition_path.clone(),
         name_mapping,
         &name_mapping.name_to_struct_name(&definition_path, content_object_name),
         object_database,
         json_schema_object_or_ref,
-    ) {
-        Ok(json_object) => json_object,
-        Err(err) => return Err(err),
-    };
+        config,
+    )?;
 
     let json_object_type_definition = match json_object {
         Some(json_object) => json_object,
@@ -158,7 +170,8 @@ fn generate_content_type(
     content_type: &str,
     media_type: &MediaType,
     content_object_name: &str,
-) -> Result<TransferMediaType, String> {
+    config: &Config,
+) -> Result<TransferMediaType, GeneratorError> {
     match content_type {
         "text/plain" => Ok(TransferMediaType::TextPlain),
         "application/json" => generate_json_content(
@@ -168,8 +181,12 @@ fn generate_content_type(
             object_database,
             media_type,
             &format!("{}Json", content_object_name),
+            config,
         ),
-        _ => Err(format!("Content-Type {} is not supported", content_type)),
+        _ => Err(GeneratorError::UnsupportedError(format!(
+            "Content-Type {}",
+            content_type
+        ))),
     }
 }
 
@@ -180,6 +197,7 @@ fn generated_content_types_from_content_map(
     name_mapping: &NameMapping,
     content: &BTreeMap<String, MediaType>,
     content_object_name: &str,
+    config: &Config,
 ) -> HashMap<ContentTypeValue, TransferMediaType> {
     let mut content_map = HashMap::new();
 
@@ -192,6 +210,7 @@ fn generated_content_types_from_content_map(
             content_type,
             media_type,
             content_object_name,
+            config,
         ) {
             Ok(transfer_media_type) => {
                 if content_map.contains_key(content_type) {
@@ -214,6 +233,7 @@ pub fn generate_request_body(
     name_mapping: &NameMapping,
     request_body: &ObjectOrReference<RequestBody>,
     function_name: &str,
+    config: &Config,
 ) -> Result<RequestEntity, String> {
     let request = match request_body.resolve(spec) {
         Ok(request) => request,
@@ -233,6 +253,7 @@ pub fn generate_request_body(
             name_mapping,
             &request.content,
             &format!("{}RequestBody", function_name),
+            config,
         ),
     })
 }
@@ -244,7 +265,8 @@ pub fn generate_responses(
     name_mapping: &NameMapping,
     responses: &BTreeMap<String, Response>,
     function_name: &str,
-) -> Result<ResponseEntities, String> {
+    config: &Config,
+) -> Result<ResponseEntities, GeneratorError> {
     let mut response_entities = ResponseEntities::new();
     for (response_key, response) in responses {
         trace!("Generate response {}", response_key);
@@ -258,10 +280,9 @@ pub fn generate_responses(
                 Err(err) => return Err(err),
             },
             Err(err) => {
-                return Err(format!(
-                    "Failed to parse status code {} {}",
-                    response_key,
-                    err.to_string()
+                return Err(GeneratorError::StatusCodeError(
+                    response_key.to_string(),
+                    err.to_string(),
                 ))
             }
         };
@@ -277,6 +298,7 @@ pub fn generate_responses(
                     name_mapping,
                     &response.content,
                     &format!("{}{}", &function_name, &canonical_status_code),
+                    config,
                 ),
             },
         );

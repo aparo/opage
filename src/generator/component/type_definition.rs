@@ -4,7 +4,10 @@ use oas3::{
 };
 use tracing::trace;
 
-use crate::utils::name_mapping::NameMapping;
+use crate::{
+    utils::{config::Config, name_mapping::NameMapping},
+    GeneratorError,
+};
 
 use super::{
     object_definition::{
@@ -21,7 +24,8 @@ pub fn get_type_from_schema(
     object_schema: &ObjectSchema,
     object_variable_fallback_name: Option<&str>,
     name_mapping: &NameMapping,
-) -> Result<TypeDefinition, String> {
+    config: &Config,
+) -> Result<TypeDefinition, GeneratorError> {
     if let Some(ref schema_type) = object_schema.schema_type {
         return get_type_from_schema_type(
             spec,
@@ -31,6 +35,7 @@ pub fn get_type_from_schema(
             object_schema,
             object_variable_fallback_name,
             name_mapping,
+            config,
         );
     }
 
@@ -42,6 +47,7 @@ pub fn get_type_from_schema(
             object_schema,
             object_variable_fallback_name,
             name_mapping,
+            config,
         );
     }
 
@@ -53,6 +59,7 @@ pub fn get_type_from_schema(
             object_schema,
             object_variable_fallback_name,
             name_mapping,
+            config,
         );
     }
 
@@ -65,6 +72,7 @@ pub fn get_type_from_schema(
         object_schema,
         object_variable_fallback_name,
         name_mapping,
+        config,
     )
 }
 
@@ -75,14 +83,15 @@ pub fn get_type_from_any_type(
     object_schema: &ObjectSchema,
     object_variable_fallback_name: Option<&str>,
     name_mapping: &NameMapping,
-) -> Result<TypeDefinition, String> {
+    config: &Config,
+) -> Result<TypeDefinition, GeneratorError> {
     let object_variable_name = match object_schema.title {
         Some(ref title) => &name_mapping.name_to_struct_name(&definition_path, &title),
         None => match object_variable_fallback_name {
             Some(title_fallback) => title_fallback,
             None => {
-                return Err(format!(
-                    "Cannot fetch type because no title or title_fallback was given"
+                return Err(GeneratorError::ResolveError(
+                    "Cannot fetch type because no title or title_fallback was given".to_string(),
                 ))
             }
         },
@@ -90,25 +99,18 @@ pub fn get_type_from_any_type(
 
     trace!("Generating any_type {}", object_variable_name);
 
-    let object_definition = match get_or_create_object(
+    let object_definition = get_or_create_object(
         spec,
         object_database,
         definition_path,
         &object_variable_name,
         &object_schema,
         name_mapping,
-    ) {
-        Ok(object_definition) => object_definition,
-        Err(err) => {
-            return Err(format!(
-                "Failed to generated struct {} {}",
-                object_variable_name, err
-            ));
-        }
-    };
+        config,
+    )?;
 
     let object_name = get_object_name(&object_definition);
-    let object_path = name_mapping.name_to_module_name(&object_name);
+    let object_path = name_mapping.name_to_module_name(&object_name, config.use_scope);
 
     let (object_name, object_path) =
         name_mapping.validate_object_name_path(&object_name, &object_path);
@@ -131,10 +133,11 @@ pub fn get_type_from_schema_type(
     object_schema: &ObjectSchema,
     object_variable_fallback_name: Option<&str>,
     name_mapping: &NameMapping,
-) -> Result<TypeDefinition, String> {
+    config: &Config,
+) -> Result<TypeDefinition, GeneratorError> {
     let single_type = match schema_type {
         oas3::spec::SchemaTypeSet::Single(single_type) => single_type,
-        _ => return Err(format!("MultiType is not supported")),
+        _ => return Err(GeneratorError::UnsupportedError("MultiType".to_owned())),
     };
 
     let object_variable_name = match object_schema.title {
@@ -142,10 +145,10 @@ pub fn get_type_from_schema_type(
         None => match object_variable_fallback_name {
             Some(title_fallback) => title_fallback,
             None => {
-                return Err(format!(
+                return Err(GeneratorError::ResolveError(format!(
                     "Cannot fetch type because no title or title_fallback was given {:#?}",
                     object_schema
-                ))
+                )))
             }
         },
     };
@@ -174,27 +177,28 @@ pub fn get_type_from_schema_type(
         oas3::spec::SchemaType::Array => {
             let item_object_ref = match object_schema.items {
                 Some(ref item_object) => item_object,
-                None => return Err(format!("Array has no item type")),
+                None => {
+                    return Err(GeneratorError::UnsupportedError(
+                        "Array has no item type".to_string(),
+                    ))
+                }
             };
 
-            let (item_type_definition_path, item_type_name, _) = match get_object_or_ref_struct_name(
+            let (item_type_definition_path, item_type_name, _) = get_object_or_ref_struct_name(
                 spec,
                 &definition_path,
                 name_mapping,
                 &item_object_ref,
-            ) {
-                Ok(definition_path_and_name) => definition_path_and_name,
-                Err(err) => return Err(format!("Unable to determine ArrayItem type name {}", err)),
-            };
+            )?;
 
             let item_object = match item_object_ref.resolve(spec) {
                 Ok(item_object) => item_object,
                 Err(err) => {
-                    return Err(format!(
+                    return Err(GeneratorError::ResolveError(format!(
                         "Failed to resolve ArrayItem\n{:#?}\n{}",
                         item_object_ref,
                         err.to_string()
-                    ))
+                    )))
                 }
             };
 
@@ -205,6 +209,7 @@ pub fn get_type_from_schema_type(
                 &item_object,
                 Some(&item_type_name),
                 name_mapping,
+                config,
             ) {
                 Ok(mut type_definition) => {
                     type_definition.name = format!("Vec<{}>", type_definition.name);
@@ -214,22 +219,15 @@ pub fn get_type_from_schema_type(
             }
         }
         oas3::spec::SchemaType::Object => {
-            let object_definition = match get_or_create_object(
+            let object_definition = get_or_create_object(
                 spec,
                 object_database,
                 definition_path,
                 &object_variable_name,
                 &object_schema,
                 name_mapping,
-            ) {
-                Ok(object_definition) => object_definition,
-                Err(err) => {
-                    return Err(format!(
-                        "Failed to generated struct {} {}",
-                        object_variable_name, err
-                    ));
-                }
-            };
+                config,
+            )?;
 
             let object_name = get_object_name(&object_definition);
             if object_name.eq("object") || object_name.eq("dict") {
@@ -240,7 +238,7 @@ pub fn get_type_from_schema_type(
                 });
             }
 
-            let object_path = name_mapping.name_to_module_name(&object_name);
+            let object_path = name_mapping.name_to_module_name(&object_name, config.use_scope);
 
             let (object_name, object_path) =
                 name_mapping.validate_object_name_path(&object_name, &object_path);
@@ -254,6 +252,9 @@ pub fn get_type_from_schema_type(
                 description: object_schema.description.clone(),
             })
         }
-        _ => Err(format!("Type {:?} not supported", single_type)),
+        _ => Err(GeneratorError::UnsupportedError(format!(
+            "Type {:?}",
+            single_type
+        ))),
     }
 }
