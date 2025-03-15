@@ -1,6 +1,6 @@
 use opage::{
     generator::{
-        component::object_definition::types::ObjectDatabase,
+        component::object_definition::types::{ObjectDatabase, PathDatabase},
         path::default_request::generate_operation,
     },
     utils::{config, name_mapping::NameMapping},
@@ -16,7 +16,8 @@ fn empty_json() {
     let spec = oas3::from_path(spec_file_path).expect("Failed to read spec");
     let path_spec = spec.paths.as_ref().unwrap().get("/test").unwrap();
 
-    let mut object_database = ObjectDatabase::new();
+    let object_database = ObjectDatabase::new();
+    let path_database = PathDatabase::new();
     let name_mapping = NameMapping::new();
     let config = config::Config::default();
 
@@ -26,7 +27,8 @@ fn empty_json() {
         &Method::POST,
         "/test",
         &path_spec.post.as_ref().unwrap(),
-        &mut object_database,
+        &object_database,
+        &path_database,
         &config,
     )
     .expect("Failed to generated path");

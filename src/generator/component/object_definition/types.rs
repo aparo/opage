@@ -77,54 +77,7 @@ pub struct EnumValue {
 }
 
 pub type ObjectDatabase = DashMap<String, ObjectDefinition>;
-
-// pub type ObjectDatabase = HashMap<String, ObjectDefinition>;
-// #[derive(Clone, Debug)]
-// pub struct ObjectDatabase {
-//     objects: DashMap<String, ObjectDefinition>,
-// }
-
-// impl ObjectDatabase {
-//     pub fn new() -> Self {
-//         ObjectDatabase {
-//             objects: DashMap::new(),
-//         }
-//     }
-
-//     pub fn keys(&self) -> Vec<String> {
-//         self.objects.iter().map(|(k)| k.key().clone()).collect()
-//     }
-
-//     pub fn contains_key(&self, key: &str) -> bool {
-//         self.objects.contains_key(key)
-//     }
-
-//     pub fn insert(&mut self, key: &str, object: ObjectDefinition) {
-//         self.objects.insert(key.to_owned(), object);
-//     }
-
-//     // pub fn get(&self, id: &str) -> Option<&ObjectDefinition> {
-//     //     let res = self.objects.get(id).as_deref();
-//     //     res.clone()
-//     // }
-
-//     // pub fn get_mut(&mut self, id: &str) -> Option<&mut ObjectDefinition> {
-//     //     let mut items = self.objects.lock().unwrap();
-//     //     items.get_mut(id)
-//     // }
-
-//     // pub fn remove(&mut self, id: &str) -> Option<ObjectDefinition> {
-//     //     self.objects.remove(id)
-//     // }
-
-//     // pub fn iter(&self) -> std::collections::hash_map::Iter<String, ObjectDefinition> {
-//     //     self.objects.iter()
-//     // }
-
-//     pub fn len(&self) -> usize {
-//         self.objects.len()
-//     }
-// }
+pub type PathDatabase = DashMap<String, PathDefinition>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnumDefinition {
@@ -325,4 +278,14 @@ pub struct PrimitiveDefinition {
 
 fn is_private_name(name: &str) -> bool {
     name.eq_ignore_ascii_case("type") || name.starts_with("r#")
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PathDefinition {
+    pub package: String,
+    pub name: String,
+    pub used_modules: Vec<ModuleInfo>,
+    pub properties: HashMap<String, PropertyDefinition>,
+    pub local_objects: HashMap<String, Box<ObjectDefinition>>,
+    pub description: Option<String>,
 }

@@ -1,6 +1,5 @@
 use std::{
-    fs::{self, File},
-    io::Write,
+    fs::{self},
     path::PathBuf,
 };
 
@@ -9,12 +8,14 @@ use tracing::{error, info};
 
 use crate::{
     generator::path::{default_request, websocket_request},
-    utils::config::Config,
+    utils::{config::Config, file::write_filename},
+    GeneratorError,
 };
 
 use super::{
     component::{
-        generate_components, object_definition::types::ObjectDatabase, write_object_database,
+        generate_components, object_definition::types::ObjectDatabase,
+        object_definition::types::PathDatabase, write_object_database,
     },
     templates::rust::populate_client_files,
 };
@@ -24,6 +25,7 @@ pub struct Generator {
     output_dir: PathBuf,
     specs: Vec<PathBuf>,
     object_database: ObjectDatabase,
+    path_database: PathDatabase,
 }
 
 impl Generator {
@@ -33,10 +35,11 @@ impl Generator {
             output_dir,
             specs,
             object_database: ObjectDatabase::new(),
+            path_database: PathDatabase::new(),
         }
     }
 
-    pub fn generate_paths(&self) -> u32 {
+    pub fn generate_paths(&self) -> Result<u32, GeneratorError> {
         let mut generated_paths = 0;
         for spec_file_path in self.specs.iter() {
             let spec = oas3::from_path(spec_file_path).expect("Failed to read spec");
@@ -49,11 +52,11 @@ impl Generator {
                 .generate_inner_paths(&spec)
                 .expect("Failed to generated paths");
         }
-        generated_paths
+        Ok(generated_paths)
         // generate_paths(&self.config, &self.output_dir, &self.specs);
     }
 
-    pub fn generate_inner_paths(&self, spec: &Spec) -> Result<u32, String> {
+    pub fn generate_inner_paths(&self, spec: &Spec) -> Result<u32, GeneratorError> {
         let mut generated_path_count = 0;
 
         let paths = match spec.paths {
@@ -90,6 +93,12 @@ impl Generator {
             if let Some(ref operation) = path_item.patch {
                 operations.push((reqwest::Method::PATCH, operation));
             }
+            if let Some(ref operation) = path_item.options {
+                operations.push((reqwest::Method::OPTIONS, operation));
+            }
+            if let Some(ref operation) = path_item.trace {
+                operations.push((reqwest::Method::TRACE, operation));
+            }
 
             for operation in operations {
                 match self.write_operation_to_file(
@@ -112,19 +121,14 @@ impl Generator {
         }
 
         let target_file = target_dir.join("mod.rs");
-
-        let mut mod_file = match File::create(target_file) {
-            Ok(file) => file,
-            Err(err) => {
-                return Err(format!("Unable to create file mod.rs {}", err.to_string()));
-            }
-        };
-
+        let mut mods = vec![];
         for mod_name in mods_to_create {
-            mod_file
-                .write(format!("pub mod {};\n", mod_name).as_bytes())
-                .expect("Failed to write to mod.rs");
+            mods.push(format!("pub mod {};\n", mod_name));
         }
+
+        mods.sort();
+        let result = mods.join("\n");
+        write_filename(&target_file, &result)?;
 
         Ok(generated_path_count)
     }
@@ -136,18 +140,25 @@ impl Generator {
         path: &str,
         operation: &Operation,
         output_path: &PathBuf,
-    ) -> Result<String, String> {
+    ) -> Result<String, GeneratorError> {
         let operation_id = match operation.operation_id {
             Some(ref operation_id) => &self.config.name_mapping.name_to_module_name(operation_id),
             None => {
-                return Err(format!("{} {} has no id", path, method.as_str()));
+                return Err(GeneratorError::MissingIdError(
+                    path.to_string(),
+                    method.to_string(),
+                ));
             }
         };
 
         let generate_websocket = match operation.extensions.get("serverstream") {
             Some(extension_value) => match extension_value {
                 serde_json::Value::Bool(generate_websocket) => generate_websocket,
-                _ => return Err("Invalid x-serverstream value".to_owned()),
+                _ => {
+                    return Err(GeneratorError::InvalidValueError(
+                        "x-serverstream".to_owned(),
+                    ))
+                }
             },
             None => &false,
         };
@@ -159,10 +170,16 @@ impl Generator {
                 &path,
                 &operation,
                 &self.object_database,
+                &self.path_database,
                 &self.config,
             ) {
                 Ok(request_code) => request_code,
-                Err(err) => return Err(format!("Failed to generated websocket code {}", err)),
+                Err(err) => {
+                    return Err(GeneratorError::CodeGenerationError(
+                        "websocket".to_owned(),
+                        err,
+                    ))
+                }
             },
             _ => match default_request::generate_operation(
                 spec,
@@ -171,11 +188,15 @@ impl Generator {
                 &path,
                 &operation,
                 &self.object_database,
+                &self.path_database,
                 &self.config,
             ) {
                 Ok(request_code) => request_code,
                 Err(err) => {
-                    return Err(format!("Failed to generate code {}", err));
+                    return Err(GeneratorError::CodeGenerationError(
+                        "default request".to_owned(),
+                        err,
+                    ))
                 }
             },
         };
@@ -192,25 +213,13 @@ impl Generator {
             full_path = full_path.join(part);
         }
 
-        fs::create_dir_all(&full_path.parent().unwrap()).expect("Creating objects dir failed");
-
-        let mut path_file = match File::create(&full_path) {
-            Ok(file) => file,
-            Err(err) => {
-                return Err(format!(
-                    "Unable to create file {}.rs {}",
-                    operation_id,
-                    err.to_string()
-                ));
-            }
-        };
-
         println!(
             "Writing to {} \n{}",
             full_path.to_str().unwrap(),
             &request_code
         );
-        path_file.write(request_code.as_bytes()).unwrap();
+        write_filename(&full_path, &request_code)?;
+
         Ok(operation_id.clone())
     }
 

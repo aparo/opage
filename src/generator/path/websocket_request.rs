@@ -6,7 +6,8 @@ use crate::{
         object_definition::{
             oas3_type_to_string,
             types::{
-                ModuleInfo, ObjectDatabase, PropertyDefinition, StructDefinition, TypeDefinition,
+                ModuleInfo, ObjectDatabase, PathDatabase, PropertyDefinition, StructDefinition,
+                TypeDefinition,
             },
         },
         type_definition::get_type_from_schema,
@@ -62,6 +63,7 @@ pub fn generate_operation(
     path: &str,
     operation: &Operation,
     object_database: &ObjectDatabase,
+    path_database: &PathDatabase,
     config: &crate::utils::config::Config,
 ) -> Result<String, String> {
     let operation_definition_path: Vec<String> = vec![path.to_owned()];

@@ -1,34 +1,34 @@
-pub mod generator;
-pub mod utils;
-
 use clap::Parser;
-use generator::{
-    component::{object_definition::types::ObjectDatabase, write_object_database},
-    generator::Generator,
-    templates::rust::populate_client_files,
-};
-use utils::config::Config;
+
+use opage::generator::generator::Generator;
+use opage::utils::config::Config;
+use tracing::{error, info};
 
 use std::path::PathBuf;
+
+use opage::Language;
 
 #[derive(Parser)]
 #[clap(author, version, about)]
 pub struct Cli {
     /// Turn debugging information on
     #[clap(short, long, action = clap::ArgAction::Count)]
-    verbose: u8,
+    pub verbose: u8,
 
     /// (json) Configuration with name mappings and ignores
     #[arg(short, long, value_name = "FILE")]
-    config: Option<PathBuf>,
+    pub config: Option<PathBuf>,
 
     /// Client output location
     #[arg(short, long, value_name = "FILE")]
-    output_dir: PathBuf,
+    pub output_dir: PathBuf,
 
     /// SInput OpenAPI spec/specs
     #[arg(short, long, value_name = "FILE")]
-    specs: Vec<PathBuf>,
+    pub specs: Vec<PathBuf>,
+    /// What mode to run the program in
+    #[arg(value_enum, default_value = "rust")]
+    pub language: Language,
 }
 
 fn main() {
@@ -57,31 +57,19 @@ fn main() {
     // Start generating
 
     // 1. Load config (Get mapper for invalid language names, ignores...)
-    let config = match config_file_path {
+    let mut config = match config_file_path {
         Some(mapping_file) => Config::from(mapping_file.as_path()).expect("Failed to parse config"),
         None => Config::new(),
     };
 
+    config.set_language(cli.language);
+
     let generator = Generator::new(config, output_dir, spec_file_paths);
 
-    generator.generate_paths();
+    match generator.generate_paths() {
+        Ok(_) => info!("Generation paths completed"),
+        Err(err) => error!("Generation failed: {}", err),
+    }
     generator.generate_objects();
     generator.populate_client_files();
-
-    // 4. Project setup
-    // let lib_target_file = output_dir.join("src").join("lib.rs");
-
-    // let mut lib_file = File::create(lib_target_file).expect("Failed to create lib.rs");
-
-    // if object_database.len() > 0 {
-    //     lib_file
-    //         .write("pub mod objects;\n".to_string().as_bytes())
-    //         .unwrap();
-    // }
-
-    // if generated_paths > 0 {
-    //     lib_file
-    //         .write("pub mod paths;\n".to_string().as_bytes())
-    //         .unwrap();
-    // }
 }

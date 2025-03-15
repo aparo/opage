@@ -2,6 +2,8 @@ use serde::Deserialize;
 use serde_aux::prelude::*;
 use std::{fs::File, path::Path};
 
+use crate::Language;
+
 use super::{name_mapping::NameMapping, spec_ignore::SpecIgnore};
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -38,10 +40,16 @@ pub struct Config {
     pub serde_deserialize: bool,
     #[serde(default = "bool_true")]
     pub use_scope: bool,
+    #[serde(default = "default_language")]
+    pub language: Language,
 }
 
 pub fn default_client_name() -> String {
     "Client".to_string()
+}
+
+pub fn default_language() -> Language {
+    Language::Rust
 }
 
 impl Default for Config {
@@ -57,6 +65,7 @@ impl Default for Config {
             serde_serialize: true,
             serde_deserialize: true,
             use_scope: true,
+            language: default_language(),
         }
     }
 }
@@ -75,5 +84,9 @@ impl Config {
 
     pub fn new() -> Self {
         Config::default()
+    }
+
+    pub fn set_language(&mut self, language: Language) {
+        self.language = language;
     }
 }

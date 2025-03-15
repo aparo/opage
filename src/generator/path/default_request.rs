@@ -11,7 +11,9 @@ use crate::{
     generator::component::{
         object_definition::{
             oas3_type_to_string,
-            types::{ModuleInfo, ObjectDatabase, PropertyDefinition, StructDefinition},
+            types::{
+                ModuleInfo, ObjectDatabase, PathDatabase, PropertyDefinition, StructDefinition,
+            },
         },
         type_definition::get_type_from_schema,
     },
@@ -29,6 +31,7 @@ pub fn generate_operation(
     path: &str,
     operation: &Operation,
     object_database: &ObjectDatabase,
+    path_database: &PathDatabase,
     config: &Config,
 ) -> Result<String, String> {
     trace!("Generating {} {}", method.as_str(), path);

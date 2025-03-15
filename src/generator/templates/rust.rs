@@ -1,7 +1,8 @@
-use crate::utils::config::{Config, ProjectMetadata};
+use crate::utils::config::Config;
+use crate::utils::file::write_filename;
+use crate::GeneratorError;
 use askama::Template;
 use std::path::PathBuf;
-use std::{fs::File, io::Write};
 
 #[derive(Template)]
 #[template(path = "rust/enum.j2", escape = "none")]
@@ -52,9 +53,9 @@ pub struct CargoTemplate<'a> {
     pub version: &'a str,
 }
 
-pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<(), String> {
+pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<(), GeneratorError> {
     let cargo_target_file = output_dir.join("cargo.toml");
-    let mut cargo_file = File::create(cargo_target_file).expect("Failed to create Cargo.toml");
+
     let template = CargoTemplate {
         name: config.project_metadata.name.as_str(),
         version: config.project_metadata.version.as_str(),
@@ -62,9 +63,7 @@ pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<()
     .render()
     .unwrap();
 
-    cargo_file
-        .write(template.as_bytes())
-        .expect("Failed to write Cargo.toml");
+    write_filename(&cargo_target_file, &template)?;
 
     let files = vec![
         (
@@ -83,10 +82,7 @@ pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<()
 
     for (content, file_name) in files {
         let target_file = output_dir.join(file_name);
-        let mut file = File::create(target_file)
-            .expect(format!("Failed to create file: {}", file_name).as_str());
-        file.write(content.as_bytes())
-            .expect(format!("Failed to write file: {}", file_name).as_str());
+        write_filename(&target_file, &content)?;
     }
 
     Ok(())

@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
-    fs::{self, File},
-    io::Write,
+    fs::{self},
     path::PathBuf,
 };
 
@@ -12,9 +11,13 @@ use object_definition::{
 };
 use tracing::{error, info, trace};
 
-use crate::utils::{
-    config::Config,
-    name_mapping::{extract_rust_name, extract_rust_namespace, fix_rust_description},
+use crate::{
+    utils::file::write_filename,
+    utils::{
+        config::Config,
+        name_mapping::{extract_rust_name, extract_rust_namespace, fix_rust_description},
+    },
+    GeneratorError,
 };
 
 use super::templates::rust::RustTypeTemplate;
@@ -27,7 +30,7 @@ pub fn generate_components(
     spec: &Spec,
     config: &Config,
     object_database: &ObjectDatabase,
-) -> Result<(), String> {
+) -> Result<(), GeneratorError> {
     let components = match spec.components {
         Some(ref components) => components,
         None => return Ok(()),
@@ -57,7 +60,7 @@ pub fn generate_components(
             }
         };
 
-        let component_name = validate_component_name(&component_name);
+        let component_name = validate_component_name(&component_name, config.use_scope);
         let definition_path = get_components_base_path();
         let object_name = match resolved_object.title {
             Some(ref title) => config
@@ -116,32 +119,16 @@ pub fn generate_components(
     Ok(())
 }
 
-pub fn write_filename(name: &PathBuf, content: &str) -> Result<(), String> {
-    fs::create_dir_all(&name.parent().unwrap()).expect("Creating objects dir failed");
-    let mut object_file = match File::create(name) {
-        Ok(file) => file,
-        Err(err) => {
-            return Err(format!(
-                "Unable to create file {} {}",
-                name.as_os_str().to_string_lossy(),
-                err.to_string()
-            ))
-        }
-    };
-    object_file.write(content.as_bytes()).unwrap();
-    Ok(())
-}
-
 pub fn write_object_database(
     output_dir: &PathBuf,
     object_database: &ObjectDatabase,
     config: &Config,
-) -> Result<(), String> {
+) -> Result<(), GeneratorError> {
     let name_mapping = &config.name_mapping;
     let target_dir = if config.use_scope {
         output_dir.join("src")
     } else {
-        output_dir.join("src").join("objects")
+        output_dir.join("src").join("models")
     };
     let mut type_map: HashMap<String, (Vec<String>, Vec<String>)> =
         std::collections::HashMap::new();
@@ -265,42 +252,37 @@ pub fn write_object_database(
     }
 
     let target_mod = target_dir.join("mod.rs");
-
-    let mut object_mod_file = match File::create(&target_mod) {
-        Ok(file) => file,
-        Err(err) => {
-            return Err(format!(
-                "Unable to create file {} {}",
-                target_mod.as_os_str().to_string_lossy(),
-                err.to_string()
-            ))
-        }
-    };
+    let mut mods = vec![];
 
     for struct_name in object_database.iter().map(|x| x.key().clone()) {
-        match object_mod_file.write(
+        mods.push(
             format!(
                 "pub mod {};\n",
                 name_mapping.name_to_module_name(&struct_name)
             )
-            .to_string()
-            .as_bytes(),
-        ) {
-            Ok(_) => (),
-            Err(err) => return Err(format!("Failed to write to mod {}", err.to_string())),
-        }
+            .to_string(),
+        )
     }
+
+    mods.sort();
+    let result = mods.join("\n");
+    write_filename(&target_mod, &result)?;
+
     Ok(())
 }
 
-fn validate_component_name(component_name: &str) -> String {
+fn validate_component_name(component_name: &str, use_scope: bool) -> String {
     let mut result = component_name.replace("___", ".").replace(".", "::");
     if result.starts_with("_") {
         result = result.trim_start_matches("_").to_owned();
         return result;
     }
     if !result.contains("::") {
-        result = format!("common::{}", result);
+        if use_scope {
+            result = format!("common::{}", result);
+        } else {
+            result = format!("models::{}", result);
+        }
     }
     result
 }
