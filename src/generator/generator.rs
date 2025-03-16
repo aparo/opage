@@ -7,7 +7,7 @@ use crate::{
     generator::{
         path::{default_request, websocket_request},
         templates::rust::generate_rust_client_code,
-        types::{ObjectDatabase, PathDatabase},
+        types::{Method, ObjectDatabase, PathDatabase},
     },
     utils::config::Config,
     GeneratorError,
@@ -71,25 +71,28 @@ impl Generator {
 
             let mut operations = vec![];
             if let Some(ref operation) = path_item.get {
-                operations.push((reqwest::Method::GET, operation));
+                operations.push((Method::GET, operation));
             }
             if let Some(ref operation) = path_item.post {
-                operations.push((reqwest::Method::POST, operation));
+                operations.push((Method::POST, operation));
             }
             if let Some(ref operation) = path_item.delete {
-                operations.push((reqwest::Method::DELETE, operation));
+                operations.push((Method::DELETE, operation));
             }
             if let Some(ref operation) = path_item.put {
-                operations.push((reqwest::Method::PUT, operation));
+                operations.push((Method::PUT, operation));
             }
             if let Some(ref operation) = path_item.patch {
-                operations.push((reqwest::Method::PATCH, operation));
+                operations.push((Method::PATCH, operation));
             }
             if let Some(ref operation) = path_item.options {
-                operations.push((reqwest::Method::OPTIONS, operation));
+                operations.push((Method::OPTIONS, operation));
             }
             if let Some(ref operation) = path_item.trace {
-                operations.push((reqwest::Method::TRACE, operation));
+                operations.push((Method::TRACE, operation));
+            }
+            if let Some(ref operation) = path_item.head {
+                operations.push((Method::HEAD, operation));
             }
 
             for operation in operations {
@@ -109,7 +112,7 @@ impl Generator {
     fn generate_path_code(
         &self,
         spec: &Spec,
-        method: &reqwest::Method,
+        method: &Method,
         path: &str,
         operation: &Operation,
     ) -> Result<String, GeneratorError> {

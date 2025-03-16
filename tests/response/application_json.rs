@@ -1,11 +1,10 @@
 use opage::{
     generator::{
         path::default_request::generate_operation,
-        types::{ObjectDatabase, PathDatabase},
+        types::{Method, ObjectDatabase, PathDatabase},
     },
     utils::{config, name_mapping::NameMapping},
 };
-use reqwest::Method;
 use std::path::PathBuf;
 
 #[test]

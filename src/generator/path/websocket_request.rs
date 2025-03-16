@@ -120,6 +120,7 @@ pub fn generate_operation(
             name: oas3_type_to_string(&oas3::spec::SchemaType::String),
             module: None,
             description: None,
+            example: None,
         },
     };
 
@@ -142,6 +143,7 @@ pub fn generate_operation(
             required: true,
             type_name: "&str".to_owned(),
             description: None,
+            example: None,
         })
         .collect::<Vec<PropertyDefinition>>();
     let package_name = name_mapping.extract_package_name(&path_parameters_struct_name);
@@ -164,6 +166,7 @@ pub fn generate_operation(
                         required: path_component.required,
                         type_name: "String".to_owned(),
                         description: path_component.description.clone(),
+                        example: path_component.example.clone(),
                     },
                 )
             })
@@ -314,6 +317,7 @@ pub fn generate_operation(
                     },
                     type_name: parameter_type.name,
                     description: parameter_type.description.clone(),
+                    example: parameter_type.example.clone(),
                 },
             ),
             Err(err) => return Err(err),

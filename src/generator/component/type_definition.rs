@@ -120,6 +120,7 @@ pub fn get_type_from_any_type(
             &object_name,
         )),
         description: object_schema.description.clone(),
+        example: object_schema.example.clone(),
     })
 }
 
@@ -156,21 +157,25 @@ pub fn get_type_from_schema_type(
             name: "bool".to_owned(),
             module: None,
             description: object_schema.description.clone(),
+            example: object_schema.example.clone(),
         }),
         oas3::spec::SchemaType::String => Ok(TypeDefinition {
             name: "String".to_owned(),
             module: None,
             description: object_schema.description.clone(),
+            example: object_schema.example.clone(),
         }),
         oas3::spec::SchemaType::Number => Ok(TypeDefinition {
             name: "f64".to_owned(),
             module: None,
             description: object_schema.description.clone(),
+            example: object_schema.example.clone(),
         }),
         oas3::spec::SchemaType::Integer => Ok(TypeDefinition {
             name: "i32".to_owned(),
             module: None,
             description: object_schema.description.clone(),
+            example: object_schema.example.clone(),
         }),
         oas3::spec::SchemaType::Array => {
             let item_object_ref = match object_schema.items {
@@ -182,7 +187,7 @@ pub fn get_type_from_schema_type(
                 }
             };
 
-            let (item_type_definition_path, item_type_name, _) = get_object_or_ref_struct_name(
+            let (item_type_definition_path, item_type_name, _, _) = get_object_or_ref_struct_name(
                 spec,
                 &definition_path,
                 name_mapping,
@@ -233,6 +238,7 @@ pub fn get_type_from_schema_type(
                     name: "serde_json::Value".to_owned(),
                     module: None,
                     description: object_schema.description.clone(),
+                    example: object_schema.example.clone(),
                 });
             }
 
@@ -248,6 +254,7 @@ pub fn get_type_from_schema_type(
                     &object_name,
                 )),
                 description: object_schema.description.clone(),
+                example: object_schema.example.clone(),
             })
         }
         _ => Err(GeneratorError::UnsupportedError(format!(

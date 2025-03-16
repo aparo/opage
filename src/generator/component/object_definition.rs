@@ -149,7 +149,15 @@ pub fn get_object_or_ref_struct_name(
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
     object_or_reference: &ObjectOrReference<ObjectSchema>,
-) -> Result<(Vec<String>, String, Option<String>), GeneratorError> {
+) -> Result<
+    (
+        Vec<String>,
+        String,
+        Option<String>,
+        Option<serde_json::Value>,
+    ),
+    GeneratorError,
+> {
     // last parameter is the description
     let object_schema = match object_or_reference {
         ObjectOrReference::Ref { ref_path } => {
@@ -162,6 +170,7 @@ pub fn get_object_or_ref_struct_name(
                             ref_definition_path.clone(),
                             name_mapping.name_to_struct_name(&ref_definition_path, ref_title),
                             object_schema.description.clone(),
+                            object_schema.example.clone(),
                         ));
                     }
                     None => {
@@ -179,6 +188,7 @@ pub fn get_object_or_ref_struct_name(
                             ref_definition_path.clone(),
                             name_mapping.name_to_struct_name(&ref_definition_path, path_name),
                             object_schema.description.clone(),
+                            object_schema.example.clone(),
                         ));
                     }
                 },
@@ -199,6 +209,7 @@ pub fn get_object_or_ref_struct_name(
             definition_path.clone(),
             name_mapping.name_to_struct_name(definition_path, &title),
             object_schema.description.clone(),
+            object_schema.example.clone(),
         ));
     }
 
@@ -216,6 +227,7 @@ pub fn get_object_or_ref_struct_name(
             definition_path.clone(),
             name_mapping.name_to_struct_name(definition_path, &type_name),
             object_schema.description.clone(),
+            object_schema.example.clone(),
         ));
     }
 
@@ -300,7 +312,7 @@ pub fn generate_enum_from_any(
             name_mapping,
             any_object_ref,
         ) {
-            Ok((_, object_type_struct_name, _)) => name_mapping.name_to_struct_name(
+            Ok((_, object_type_struct_name, _, _)) => name_mapping.name_to_struct_name(
                 &any_object_definition_path,
                 &format!("{}Value", object_type_struct_name),
             ),
@@ -396,7 +408,7 @@ pub fn generate_enum_from_one_of(
             name_mapping,
             one_of_object_ref,
         ) {
-            Ok((_, object_type_struct_name, _)) => name_mapping.name_to_struct_name(
+            Ok((_, object_type_struct_name, _, _)) => name_mapping.name_to_struct_name(
                 &one_of_object_definition_path,
                 &format!("{}Value", object_type_struct_name),
             ),
@@ -517,7 +529,7 @@ fn get_or_create_property(
         }
     };
 
-    let (property_type_definition_path, property_type_name, description) =
+    let (property_type_definition_path, property_type_name, description, example) =
         get_object_or_ref_struct_name(spec, &definition_path, name_mapping, property_ref)?;
 
     match get_type_from_schema(
@@ -535,8 +547,9 @@ fn get_or_create_property(
             module: property_type_definition.module,
             name: name_mapping.name_to_property_name(&definition_path, property_name),
             real_name: property_name.clone(),
-            required: required,
+            required,
             description,
+            example: property.example.clone(),
         }),
         Err(err) => Err(err),
     }

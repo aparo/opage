@@ -56,7 +56,7 @@ fn parse_json_data(
             name_mapping,
             &json_schema_object_or_ref,
         ) {
-            Ok((_, object_name, description)) => Some(TypeDefinition {
+            Ok((_, object_name, description, example)) => Some(TypeDefinition {
                 module: Some(ModuleInfo {
                     path: format!(
                         "crate::objects::{}",
@@ -66,6 +66,7 @@ fn parse_json_data(
                 }),
                 name: object_name.clone(),
                 description,
+                example,
             }),
             Err(err) => return Err(err),
         },

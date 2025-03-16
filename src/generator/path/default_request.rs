@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use convert_case::Casing;
 use oas3::{
-    spec::{Operation, ParameterIn},
+    spec::{Operation, ParameterIn, SchemaTypeSet},
     Spec,
 };
 use tracing::trace;
@@ -13,7 +13,7 @@ use crate::{
             object_definition::oas3_type_to_string, type_definition::get_type_from_schema,
         },
         types::{
-            ModuleInfo, ObjectDatabase, PathDatabase, PathDefinition, PathParameters,
+            Method, ModuleInfo, ObjectDatabase, PathDatabase, PathDefinition, PathParameters,
             PropertyDefinition, QueryParameters, RequestEntity, StructDefinition,
             TransferMediaType,
         },
@@ -27,14 +27,14 @@ use super::utils::{generate_request_body, generate_responses, is_path_parameter}
 pub fn generate_operation(
     spec: &Spec,
     name_mapping: &NameMapping,
-    method: &reqwest::Method,
+    method: &Method,
     path: &str,
     operation: &Operation,
     object_database: &ObjectDatabase,
     path_database: &PathDatabase,
     config: &Config,
 ) -> Result<String, GeneratorError> {
-    trace!("Generating {} {}", method.as_str(), path);
+    trace!("Generating {:?} {}", method, path);
     let operation_definition_path: Vec<String> = vec![path.to_owned()];
     let description = operation
         .description
@@ -65,6 +65,8 @@ pub fn generate_operation(
 
     // Path parameters
     let path_parameters = generate_path_parameters(
+        spec,
+        &operation,
         &operation_definition_path,
         name_mapping,
         &function_name,
@@ -645,6 +647,8 @@ pub fn generate_operation(
     // request_source_code += "}\n";
     let path_definition = PathDefinition {
         name: function_name.clone(),
+        url: path.to_owned(),
+        method: method.to_owned(),
         response_entities,
         used_modules: module_imports,
         request_body,
@@ -670,6 +674,8 @@ fn media_type_enum_name(
 }
 
 fn generate_path_parameters(
+    spec: &Spec,
+    operation: &Operation,
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
     function_name: &str,
@@ -688,14 +694,56 @@ fn generate_path_parameters(
         .split("/")
         .filter(|&path_component| is_path_parameter(&path_component))
         .map(|path_component| path_component.replace("{", "").replace("}", ""))
-        .map(|path_component| PropertyDefinition {
-            module: None,
-            name: name_mapping
-                .name_to_property_name(&path_parameters_definition_path, &path_component),
-            real_name: path_component,
-            required: true,
-            type_name: "&str".to_owned(),
-            description: None,
+        .map(|path_component| {
+            let mut description = None;
+            let mut example: Option<serde_json::Value> = None;
+            let mut type_name = "String".to_owned();
+            operation.parameters.iter().find(|f| match f {
+                oas3::spec::ObjectOrReference::Ref { ref_path } => false,
+                oas3::spec::ObjectOrReference::Object(parameter) => {
+                    if parameter.location != ParameterIn::Path {
+                        return false;
+                    }
+                    if parameter.name != path_component {
+                        return false;
+                    }
+                    if let Some(ref schema) = parameter.schema {
+                        match schema.resolve(spec) {
+                            Ok(schema) => {
+                                description = schema.description.clone();
+                                example = schema.example.clone();
+                                if let Some(ref schema_type) = schema.schema_type {
+                                    type_name = match schema_type {
+                                        SchemaTypeSet::Single(single_type) => {
+                                            oas3_type_to_string(single_type)
+                                        }
+                                        SchemaTypeSet::Multiple(multiple_types) => multiple_types
+                                            .iter()
+                                            .map(oas3_type_to_string)
+                                            .collect::<Vec<String>>()
+                                            .join(""),
+                                    };
+                                }
+                            }
+                            Err(err) => {
+                                return false;
+                            }
+                        }
+                    }
+                    true
+                }
+            });
+
+            PropertyDefinition {
+                module: None,
+                name: name_mapping
+                    .name_to_property_name(&path_parameters_definition_path, &path_component),
+                real_name: path_component,
+                required: true,
+                type_name,
+                description,
+                example,
+            }
         })
         .collect::<Vec<PropertyDefinition>>();
     let package_name = name_mapping.extract_package_name(&path_parameters_struct_name);
@@ -717,8 +765,9 @@ fn generate_path_parameters(
                         name: path_component.name.clone(),
                         real_name: path_component.real_name.clone(),
                         required: path_component.required,
-                        type_name: "String".to_owned(),
+                        type_name: path_component.type_name.clone(),
                         description: path_component.description.clone(),
+                        example: path_component.example.clone(),
                     },
                 )
             })
@@ -832,6 +881,7 @@ fn generate_query_parameter_code(
                     },
                     type_name: parameter_type.name,
                     description: parameter_type.description.clone(),
+                    example: parameter_type.example.clone(),
                 },
             ),
             Err(err) => return Err(err),
@@ -916,7 +966,7 @@ fn generate_multi_request_type_functions(
     module_imports: &mut Vec<ModuleInfo>,
     query_parameter_code: &QueryParameters,
     response_enum_name: &str,
-    method: &reqwest::Method,
+    method: &Method,
     request_entity: &RequestEntity,
 ) -> Option<String> {
     if request_entity.content.len() < 2 {
@@ -1014,7 +1064,7 @@ fn generate_multi_request_type_functions(
 
         request_source_code += &format!(
             "  let request_builder = client.{}(format!(\"{{server}}{}\", {})){};\n",
-            method.as_str().to_lowercase(),
+            method.to_string().to_lowercase(),
             path_parameters.path_format_string,
             path_parameters
                 .parameters_struct

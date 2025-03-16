@@ -1,8 +1,10 @@
 use crate::generator::types::{ModuleInfo, PropertyDefinition};
 use crate::utils::config::Config;
 use crate::utils::file::write_filename;
+use crate::utils::name_mapping::convert_name;
 use crate::GeneratorError;
 use askama::Template;
+use clap::builder::Str;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -99,8 +101,9 @@ pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<()
 #[template(path = "rust/client_function.j2", escape = "none")]
 pub struct RustClientFunctionTemplate<'a> {
     pub name: &'a str,
-    pub description: &'a str,
+    pub description: String,
     pub required_properties: Vec<PropertyDefinition>,
+    pub builder_name: String,
 }
 
 pub fn generate_rust_client_code(
@@ -114,11 +117,36 @@ pub fn generate_rust_client_code(
 
     for path in paths.iter() {
         let required_properties = path.get_required_properties();
+        let scope: Vec<String> = vec![];
+        let builder_name = format!("{}Builder", convert_name(&path.name));
+
+        // we build description for the function
+        let mut description = path.description.clone();
+        description.push_str("\n");
+        description.push_str("\n");
+        description.push_str(
+            format!("Sends a `{:?}` request to `{}`\n\n", path.method, path.url).as_str(),
+        );
+        description.push_str("Arguments:\n");
+        for property in required_properties.iter() {
+            description.push_str(
+                format!(
+                    "- `{}`: {}\n",
+                    property.name,
+                    property
+                        .description
+                        .clone()
+                        .unwrap_or(String::from("No description available"))
+                )
+                .as_str(),
+            );
+        }
 
         let function = RustClientFunctionTemplate {
             name: &path.name,
-            description: &path.description,
+            description,
             required_properties,
+            builder_name,
         };
         // let operation_id = operation.operation_id.clone();
         // let operation_code = operation.generate_rust_code(config);

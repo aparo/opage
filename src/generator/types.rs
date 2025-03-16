@@ -50,6 +50,7 @@ pub struct TypeDefinition {
     pub name: String,
     pub module: Option<ModuleInfo>,
     pub description: Option<String>,
+    pub example: Option<serde_json::Value>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -60,6 +61,7 @@ pub struct PropertyDefinition {
     pub module: Option<ModuleInfo>,
     pub required: bool,
     pub description: Option<String>,
+    pub example: Option<serde_json::Value>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -315,9 +317,44 @@ pub struct PathParameters {
 }
 
 #[derive(Clone, Debug)]
+pub enum Method {
+    GET,
+    POST,
+    PUT,
+    DELETE,
+    PATCH,
+    HEAD,
+    OPTIONS,
+    TRACE,
+}
+
+impl ToString for Method {
+    fn to_string(&self) -> String {
+        match self {
+            Method::GET => "GET".to_string(),
+            Method::POST => "POST".to_string(),
+            Method::PUT => "PUT".to_string(),
+            Method::DELETE => "DELETE".to_string(),
+            Method::PATCH => "PATCH".to_string(),
+            Method::HEAD => "HEAD".to_string(),
+            Method::OPTIONS => "OPTIONS".to_string(),
+            Method::TRACE => "TRACE".to_string(),
+        }
+    }
+}
+
+// impl std::fmt::Display for Method {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.to_string())
+//     }
+// }
+
+#[derive(Clone, Debug)]
 pub struct PathDefinition {
     pub package: String,
     pub name: String,
+    pub method: Method,
+    pub url: String,
     pub response_name: String,
     pub used_modules: Vec<ModuleInfo>,
     pub properties: HashMap<String, PropertyDefinition>,
@@ -334,6 +371,8 @@ impl Default for PathDefinition {
         PathDefinition {
             package: "".to_string(),
             name: "".to_string(),
+            method: Method::GET,
+            url: "/".to_string(),
             response_name: "".to_string(),
             used_modules: vec![],
             properties: HashMap::new(),
