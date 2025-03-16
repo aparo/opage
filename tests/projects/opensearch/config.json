@@ -1,0 +1,21 @@
+{
+    "project_metadata": {
+        "name": "opensearch-client",
+        "version": "2.9.0"
+    },
+    "client_name": "OpenSearchClient",
+    "name_mapping": {
+        "struct_mapping": {
+            "/Component/SubComponent/TestObject": "TestObjectData"
+        },
+        "property_mapping": {},
+        "module_mapping": {},
+        "status_code_mapping": {},
+        "use_scope": true,
+        "i32_to_u32": true
+    },
+    "ignore": {
+        "paths": [],
+        "components": []
+    }
+}

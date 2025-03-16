@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use opage::{
-    generator::component::{generate_components, object_definition::types::ObjectDatabase},
+    generator::component::generate_components, generator::types::ObjectDatabase,
     utils::config::Config,
 };
 

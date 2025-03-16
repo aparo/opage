@@ -6,7 +6,6 @@ use crate::utils::{
 use askama::Template;
 use dashmap::DashMap;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModuleInfo {
@@ -144,7 +143,7 @@ impl EnumDefinition {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct StructDefinition {
     pub package: String,
     pub name: String,
@@ -280,7 +279,35 @@ fn is_private_name(name: &str) -> bool {
     name.eq_ignore_ascii_case("type") || name.starts_with("r#")
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
+pub enum TransferMediaType {
+    ApplicationJson(Option<TypeDefinition>),
+    TextPlain,
+}
+
+pub type ContentTypeValue = String;
+
+#[derive(Clone, Debug)]
+pub struct ResponseEntity {
+    pub canonical_status_code: String,
+    pub content: HashMap<ContentTypeValue, TransferMediaType>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RequestEntity {
+    pub content: HashMap<ContentTypeValue, TransferMediaType>,
+}
+
+pub type ResponseEntities = HashMap<String, ResponseEntity>;
+
+#[derive(Clone, Debug, Default)]
+pub struct QueryParametersCode {
+    pub query_struct: StructDefinition,
+    pub query_struct_variable_name: String,
+    pub unroll_query_parameters_code: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct PathDefinition {
     pub package: String,
     pub name: String,
@@ -288,7 +315,9 @@ pub struct PathDefinition {
     pub used_modules: Vec<ModuleInfo>,
     pub properties: HashMap<String, PropertyDefinition>,
     pub local_objects: HashMap<String, Box<ObjectDefinition>>,
-    pub description: Option<String>,
+    pub description: String,
+    pub response_entities: ResponseEntities,
+    pub query_parameters: QueryParametersCode,
 }
 
 impl Default for PathDefinition {
@@ -300,7 +329,48 @@ impl Default for PathDefinition {
             used_modules: vec![],
             properties: HashMap::new(),
             local_objects: HashMap::new(),
-            description: None,
+            description: "".to_string(),
+            response_entities: HashMap::new(),
+            query_parameters: QueryParametersCode {
+                query_struct: StructDefinition {
+                    package: "".to_string(),
+                    name: "".to_string(),
+                    used_modules: vec![],
+                    properties: HashMap::new(),
+                    local_objects: HashMap::new(),
+                    description: None,
+                },
+                query_struct_variable_name: "".to_string(),
+                unroll_query_parameters_code: "".to_string(),
+            },
         }
+    }
+}
+
+impl PathDefinition {
+    pub fn extract_response_modules(&self) -> Vec<ModuleInfo> {
+        let mut module_imports: Vec<ModuleInfo> = vec![];
+        for (_, entity) in &self.response_entities {
+            for (_, content) in &entity.content {
+                match content {
+                    TransferMediaType::ApplicationJson(ref type_definition) => {
+                        match type_definition {
+                            Some(type_definition) => match type_definition.module {
+                                Some(ref module_info) => {
+                                    if module_imports.contains(module_info) {
+                                        continue;
+                                    }
+                                    module_imports.push(module_info.clone());
+                                }
+                                _ => (),
+                            },
+                            None => (),
+                        }
+                    }
+                    TransferMediaType::TextPlain => (),
+                }
+            }
+        }
+        module_imports
     }
 }

@@ -4,6 +4,11 @@ use crate::GeneratorError;
 use askama::Template;
 use std::path::PathBuf;
 
+// list of primitive types of Rust language
+pub const RUST_PRIMITIVE_TYPES: [&str; 13] = [
+    "bool", "char", "f32", "f64", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "String",
+];
+
 #[derive(Template)]
 #[template(path = "rust/enum.j2", escape = "none")]
 pub struct RustEnumTemplate<'a> {

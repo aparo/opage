@@ -1,7 +1,7 @@
 use opage::{
     generator::{
-        component::object_definition::types::{ObjectDatabase, PathDatabase},
         path::default_request::generate_operation,
+        types::{ObjectDatabase, PathDatabase},
     },
     utils::{config, name_mapping::NameMapping},
 };

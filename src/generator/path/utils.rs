@@ -1,7 +1,4 @@
-use std::{
-    ascii::AsciiExt,
-    collections::{BTreeMap, HashMap},
-};
+use std::collections::{BTreeMap, HashMap};
 
 use oas3::{
     spec::{MediaType, ObjectOrReference, ObjectSchema, RequestBody, Response},
@@ -11,44 +8,23 @@ use reqwest::StatusCode;
 use tracing::{error, trace};
 
 use crate::{
-    generator::component::{
-        object_definition::{
-            get_object_or_ref_struct_name, is_object_empty,
-            types::{ModuleInfo, ObjectDatabase, TypeDefinition},
+    generator::{
+        component::{
+            object_definition::{get_object_or_ref_struct_name, is_object_empty},
+            type_definition::get_type_from_schema,
         },
-        type_definition::get_type_from_schema,
+        types::{
+            ContentTypeValue, ModuleInfo, ObjectDatabase, RequestEntity, ResponseEntities,
+            ResponseEntity, TransferMediaType, TypeDefinition,
+        },
     },
-    utils::{
-        config::{self, Config},
-        name_mapping::NameMapping,
-    },
+    utils::{config::Config, name_mapping::NameMapping},
     GeneratorError,
 };
-
-type ContentTypeValue = String;
 
 pub fn is_path_parameter(path_component: &str) -> bool {
     path_component.starts_with("{") && path_component.ends_with("}")
 }
-
-#[derive(Clone, Debug)]
-pub enum TransferMediaType {
-    ApplicationJson(Option<TypeDefinition>),
-    TextPlain,
-}
-
-#[derive(Clone, Debug)]
-pub struct ResponseEntity {
-    pub canonical_status_code: String,
-    pub content: HashMap<ContentTypeValue, TransferMediaType>,
-}
-
-#[derive(Clone, Debug)]
-pub struct RequestEntity {
-    pub content: HashMap<ContentTypeValue, TransferMediaType>,
-}
-
-pub type ResponseEntities = HashMap<String, ResponseEntity>;
 
 fn parse_json_data(
     spec: &Spec,
@@ -84,7 +60,7 @@ fn parse_json_data(
                 module: Some(ModuleInfo {
                     path: format!(
                         "crate::objects::{}",
-                        name_mapping.name_to_module_name(&object_name, config.use_scope)
+                        name_mapping.name_to_module_name(&object_name)
                     ),
                     name: object_name.clone(),
                 }),
@@ -234,14 +210,14 @@ pub fn generate_request_body(
     request_body: &ObjectOrReference<RequestBody>,
     function_name: &str,
     config: &Config,
-) -> Result<RequestEntity, String> {
+) -> Result<RequestEntity, GeneratorError> {
     let request = match request_body.resolve(spec) {
         Ok(request) => request,
         Err(err) => {
-            return Err(format!(
+            return Err(GeneratorError::ResolveError(format!(
                 "Failed to resolve request body {}",
                 err.to_string()
-            ))
+            )))
         }
     };
 

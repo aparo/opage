@@ -5,15 +5,13 @@ use oas3::{
 use tracing::trace;
 
 use crate::{
+    generator::types::{ModuleInfo, TypeDefinition},
     utils::{config::Config, name_mapping::NameMapping},
     GeneratorError,
 };
 
 use super::{
-    object_definition::{
-        get_object_name, get_object_or_ref_struct_name, get_or_create_object,
-        types::{ModuleInfo, TypeDefinition},
-    },
+    object_definition::{get_object_name, get_object_or_ref_struct_name, get_or_create_object},
     ObjectDatabase,
 };
 
@@ -110,7 +108,7 @@ pub fn get_type_from_any_type(
     )?;
 
     let object_name = get_object_name(&object_definition);
-    let object_path = name_mapping.name_to_module_name(&object_name, config.use_scope);
+    let object_path = name_mapping.name_to_module_name(&object_name);
 
     let (object_name, object_path) =
         name_mapping.validate_object_name_path(&object_name, &object_path);
@@ -238,7 +236,7 @@ pub fn get_type_from_schema_type(
                 });
             }
 
-            let object_path = name_mapping.name_to_module_name(&object_name, config.use_scope);
+            let object_path = name_mapping.name_to_module_name(&object_name);
 
             let (object_name, object_path) =
                 name_mapping.validate_object_name_path(&object_name, &object_path);

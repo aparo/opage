@@ -4,13 +4,7 @@ use std::{
     path::PathBuf,
 };
 
-use oas3::Spec;
-use object_definition::{
-    generate_object, get_components_base_path, get_object_name, modules_to_string,
-    types::{ObjectDatabase, ObjectDefinition},
-};
-use tracing::{error, info, trace};
-
+use crate::generator::types::{ObjectDatabase, ObjectDefinition};
 use crate::{
     utils::file::write_filename,
     utils::{
@@ -19,6 +13,11 @@ use crate::{
     },
     GeneratorError,
 };
+use oas3::Spec;
+use object_definition::{
+    generate_object, get_components_base_path, get_object_name, modules_to_string,
+};
+use tracing::{error, info, trace};
 
 use super::templates::rust::RustTypeTemplate;
 use askama::Template;
@@ -60,7 +59,8 @@ pub fn generate_components(
             }
         };
 
-        let component_name = validate_component_name(&component_name, config.use_scope);
+        let component_name =
+            validate_component_name(&component_name, config.name_mapping.use_scope);
         let definition_path = get_components_base_path();
         let object_name = match resolved_object.title {
             Some(ref title) => config
@@ -126,7 +126,7 @@ pub fn write_object_database(
     config: &Config,
 ) -> Result<(), GeneratorError> {
     let name_mapping = &config.name_mapping;
-    let target_dir = if config.use_scope {
+    let target_dir = if config.name_mapping.use_scope {
         output_dir.join("src")
     } else {
         output_dir.join("src").join("models")
@@ -142,7 +142,7 @@ pub fn write_object_database(
         let object_definition = item.value();
         let object_name = get_object_name(object_definition);
 
-        let module_name = name_mapping.name_to_module_name(&object_name, config.use_scope);
+        let module_name = name_mapping.name_to_module_name(&object_name);
 
         let target_file = target_dir.join(format!(
             "{}.rs",
@@ -259,7 +259,7 @@ pub fn write_object_database(
         mods.push(
             format!(
                 "pub mod {};\n",
-                name_mapping.name_to_module_name(&struct_name, config.use_scope)
+                name_mapping.name_to_module_name(&struct_name)
             )
             .to_string(),
         )

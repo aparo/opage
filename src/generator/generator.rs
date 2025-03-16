@@ -1,22 +1,18 @@
-use std::{
-    fs::{self},
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 use oas3::{spec::Operation, Spec};
 use tracing::{error, info};
 
 use crate::{
     generator::path::{default_request, websocket_request},
-    utils::{config::Config, file::write_filename},
+    generator::types::ObjectDatabase,
+    generator::types::PathDatabase,
+    utils::config::Config,
     GeneratorError,
 };
 
 use super::{
-    component::{
-        generate_components, object_definition::types::ObjectDatabase,
-        object_definition::types::PathDatabase, write_object_database,
-    },
+    component::{generate_components, write_object_database},
     templates::rust::populate_client_files,
 };
 
@@ -43,17 +39,14 @@ impl Generator {
         let mut generated_paths = 0;
         for spec_file_path in self.specs.iter() {
             let spec = oas3::from_path(spec_file_path).expect("Failed to read spec");
-            // 3. Generate Code
-            // 3.1 Components and database for type referencing
+            // Components and database for type referencing
             generate_components(&spec, &self.config, &self.object_database).unwrap();
-            // object_database = odb;
-            // 3.2 Generate paths requests
+            // Generate paths requests
             generated_paths += self
                 .generate_inner_paths(&spec)
                 .expect("Failed to generated paths");
         }
         Ok(generated_paths)
-        // generate_paths(&self.config, &self.output_dir, &self.specs);
     }
 
     pub fn generate_inner_paths(&self, spec: &Spec) -> Result<u32, GeneratorError> {
@@ -63,11 +56,6 @@ impl Generator {
             Some(ref paths) => paths,
             None => return Ok(generated_path_count),
         };
-        let target_dir = self.output_dir.join("src");
-
-        fs::create_dir_all(&target_dir).expect("Creating objects dir failed");
-
-        let mut mods_to_create = vec![];
 
         for (name, path_item) in paths {
             if self.config.ignore.path_ignored(&name) {
@@ -101,11 +89,8 @@ impl Generator {
             }
 
             for operation in operations {
-                match self.generate_path_code(spec, &operation.0, &name, operation.1, &target_dir) {
-                    Ok(operation_id) => {
-                        mods_to_create.push(operation_id.clone());
-                        ()
-                    }
+                match self.generate_path_code(spec, &operation.0, &name, operation.1) {
+                    Ok(_) => (),
                     Err(err) => {
                         error!("{}", err);
                     }
@@ -113,16 +98,6 @@ impl Generator {
                 generated_path_count += 1;
             }
         }
-
-        let target_file = target_dir.join("mod.rs");
-        let mut mods = vec![];
-        for mod_name in mods_to_create {
-            mods.push(format!("pub mod {};\n", mod_name));
-        }
-
-        mods.sort();
-        let result = mods.join("\n");
-        write_filename(&target_file, &result)?;
 
         Ok(generated_path_count)
     }
@@ -133,13 +108,9 @@ impl Generator {
         method: &reqwest::Method,
         path: &str,
         operation: &Operation,
-        output_path: &PathBuf,
     ) -> Result<String, GeneratorError> {
         let operation_id = match operation.operation_id {
-            Some(ref operation_id) => &self
-                .config
-                .name_mapping
-                .name_to_module_name(operation_id, self.config.use_scope),
+            Some(ref operation_id) => &self.config.name_mapping.name_to_module_name(operation_id),
             None => {
                 return Err(GeneratorError::MissingIdError(
                     path.to_string(),
@@ -160,7 +131,7 @@ impl Generator {
             None => &false,
         };
 
-        let request_code = match generate_websocket {
+        match generate_websocket {
             true => match websocket_request::generate_operation(
                 spec,
                 &self.config.name_mapping,
@@ -193,24 +164,24 @@ impl Generator {
             },
         };
 
-        let mut full_path = output_path.join("src");
-        let parts = operation_id.split('.').collect::<Vec<&str>>();
-        for pos in 0..parts.len() {
-            let part = parts[pos];
-            if pos == parts.len() - 1 {
-                full_path = full_path.join(format!("{}.rs", part));
-                break;
-            }
+        // let mut full_path = output_path.join("src");
+        // let parts = operation_id.split('.').collect::<Vec<&str>>();
+        // for pos in 0..parts.len() {
+        //     let part = parts[pos];
+        //     if pos == parts.len() - 1 {
+        //         full_path = full_path.join(format!("{}.rs", part));
+        //         break;
+        //     }
 
-            full_path = full_path.join(part);
-        }
+        //     full_path = full_path.join(part);
+        // }
 
-        println!(
-            "Writing to {} \n{}",
-            full_path.to_str().unwrap(),
-            &request_code
-        );
-        write_filename(&full_path, &request_code)?;
+        // println!(
+        //     "Writing to {} \n{}",
+        //     full_path.to_str().unwrap(),
+        //     &request_code
+        // );
+        // write_filename(&full_path, &request_code)?;
 
         Ok(operation_id.clone())
     }

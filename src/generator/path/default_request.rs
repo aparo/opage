@@ -8,23 +8,20 @@ use oas3::{
 use tracing::trace;
 
 use crate::{
-    generator::component::{
-        object_definition::{
-            oas3_type_to_string,
-            types::{
-                ModuleInfo, ObjectDatabase, PathDatabase, PathDefinition, PropertyDefinition,
-                StructDefinition,
-            },
+    generator::{
+        component::{
+            object_definition::oas3_type_to_string, type_definition::get_type_from_schema,
         },
-        type_definition::get_type_from_schema,
+        types::{
+            ModuleInfo, ObjectDatabase, PathDatabase, PathDefinition, PropertyDefinition,
+            QueryParametersCode, RequestEntity, StructDefinition, TransferMediaType,
+        },
     },
     utils::{config::Config, name_mapping::NameMapping},
     GeneratorError,
 };
 
-use super::utils::{
-    generate_request_body, generate_responses, is_path_parameter, RequestEntity, TransferMediaType,
-};
+use super::utils::{generate_request_body, generate_responses, is_path_parameter};
 
 pub fn generate_operation(
     spec: &Spec,
@@ -38,8 +35,15 @@ pub fn generate_operation(
 ) -> Result<String, GeneratorError> {
     trace!("Generating {} {}", method.as_str(), path);
     let operation_definition_path: Vec<String> = vec![path.to_owned()];
+    let description = operation
+        .description
+        .as_ref()
+        .map_or(operation.summary.as_ref().map_or("", |f| f.as_str()), |d| {
+            d.as_str()
+        });
+
     let function_name = match operation.operation_id {
-        Some(ref operation_id) => name_mapping.name_to_module_name(operation_id, config.use_scope),
+        Some(ref operation_id) => name_mapping.name_to_module_name(operation_id),
         None => {
             return Err(GeneratorError::MissingIdError(
                 "operation_id".to_string(),
@@ -97,117 +101,128 @@ pub fn generate_operation(
     }];
 
     // Response types
-    for (_, entity) in &response_entities {
-        for (_, content) in &entity.content {
-            match content {
-                TransferMediaType::ApplicationJson(ref type_definition) => match type_definition {
-                    Some(type_definition) => match type_definition.module {
-                        Some(ref module_info) => {
-                            if module_imports.contains(module_info) {
-                                continue;
-                            }
-                            module_imports.push(module_info.clone());
-                        }
-                        _ => (),
-                    },
-                    None => (),
-                },
-                TransferMediaType::TextPlain => (),
-            }
-        }
-    }
+    // for (_, entity) in &response_entities {
+    //     for (_, content) in &entity.content {
+    //         match content {
+    //             TransferMediaType::ApplicationJson(ref type_definition) => match type_definition {
+    //                 Some(type_definition) => match type_definition.module {
+    //                     Some(ref module_info) => {
+    //                         if module_imports.contains(module_info) {
+    //                             continue;
+    //                         }
+    //                         module_imports.push(module_info.clone());
+    //                     }
+    //                     _ => (),
+    //                 },
+    //                 None => (),
+    //             },
+    //             TransferMediaType::TextPlain => (),
+    //         }
+    //     }
+    // }
 
-    let mut response_enum_source_code = String::new();
+    // let mut response_status_response = HashMap::new();
+
+    // let mut response_enum_source_code = String::new();
 
     // Generated enums for multi content type responses
-    for (_, entity) in &response_entities {
-        if entity.content.len() < 2 {
-            continue;
-        }
+    // for (_, entity) in &response_entities {
+    //     if entity.content.len() < 2 {
+    //         continue;
+    //     }
 
-        let response_code_enum_name = name_mapping.name_to_struct_name(
-            &response_enum_definition_path,
-            &format!("{}Value", entity.canonical_status_code),
-        );
-        response_enum_source_code += &format!(
-            "pub enum {} {{\n",
-            &name_mapping.extract_struct_name(&response_code_enum_name)
-        );
-        let mut enum_definition_path = operation_definition_path.clone();
-        enum_definition_path.push(response_code_enum_name);
+    //     // let response_code_enum_name = name_mapping.name_to_struct_name(
+    //     //     &response_enum_definition_path,
+    //     //     &format!("{}Value", entity.canonical_status_code),
+    //     // );
+    //     // response_enum_source_code += &format!(
+    //     //     "pub enum {} {{\n",
+    //     //     &name_mapping.extract_struct_name(&response_code_enum_name)
+    //     // );
+    //     let mut enum_definition_path = operation_definition_path.clone();
+    //     enum_definition_path.push(response_code_enum_name);
 
-        for (_, transfer_media_type) in &entity.content {
-            let transfer_media_type_name =
-                media_type_enum_name(&enum_definition_path, name_mapping, transfer_media_type);
-            response_enum_source_code += &match transfer_media_type {
-                TransferMediaType::ApplicationJson(type_definiton) => match type_definiton {
-                    Some(type_definition) => {
-                        format!(
-                            "  {}({}),\n",
-                            transfer_media_type_name, type_definition.name
-                        )
-                    }
+    //     for (_, transfer_media_type) in &entity.content {
+    //         let transfer_media_type_name =
+    //             media_type_enum_name(&enum_definition_path, name_mapping, transfer_media_type);
+    //         response_enum_source_code += &match transfer_media_type {
+    //             TransferMediaType::ApplicationJson(type_definiton) => match type_definiton {
+    //                 Some(type_definition) => {
+    //                     format!(
+    //                         "  {}({}),\n",
+    //                         transfer_media_type_name, type_definition.name
+    //                     )
+    //                 }
 
-                    None => format!("  {},\n", transfer_media_type_name),
-                },
-                TransferMediaType::TextPlain => format!(
-                    "  {}({}),\n",
-                    transfer_media_type_name,
-                    oas3_type_to_string(&oas3::spec::SchemaType::String)
-                ),
-            }
-        }
-        response_enum_source_code += "}\n\n";
-    }
+    //                 None => format!("  {},\n", transfer_media_type_name),
+    //             },
+    //             TransferMediaType::TextPlain => format!(
+    //                 "  {}({}),\n",
+    //                 transfer_media_type_name,
+    //                 oas3_type_to_string(&oas3::spec::SchemaType::String)
+    //             ),
+    //         }
+    //     }
+    //     response_enum_source_code += "}\n\n";
+    // }
 
-    response_enum_source_code += &format!(
-        "pub enum {} {{\n",
-        name_mapping.extract_struct_name(&response_enum_name)
-    );
+    // response_enum_source_code += &format!(
+    //     "pub enum {} {{\n",
+    //     name_mapping.extract_struct_name(&response_enum_name)
+    // );
 
-    for (status_code, entity) in &response_entities {
-        let response_enum_name = name_mapping.name_to_struct_name(
-            &response_enum_definition_path,
-            &format!("{}", entity.canonical_status_code),
-        );
+    // for (status_code, entity) in &response_entities {
+    //     let response_enum_name = name_mapping.name_to_struct_name(
+    //         &response_enum_definition_path,
+    //         &format!("{}", entity.canonical_status_code),
+    //     );
 
-        response_enum_source_code += &match entity.content.len() {
-            0 => continue,
-            1 => match entity.content.values().next() {
-                Some(transfer_media_type) => match transfer_media_type {
-                    TransferMediaType::ApplicationJson(type_definiton) => match type_definiton {
-                        Some(type_definition) => {
-                            format!("  {}({}),\n", response_enum_name, type_definition.name)
-                        }
+    //     match entity.content.len() {
+    //         0 => continue,
+    //         1 => match entity.content.values().next() {
+    //             Some(transfer_media_type) => match transfer_media_type {
+    //                 TransferMediaType::ApplicationJson(type_definiton) => match type_definiton {
+    //                     Some(type_definition) => {
+    //                         response_status_response.insert(
+    //                             status_code.clone(),
+    //                             ResponseDefinition {
+    //                                 status_code: status_code.clone(),
+    //                                 response_enum_name: response_enum_name.clone(),
+    //                                 response_code_enum_name: None,
+    //                                 type_definition: Some(type_definition.clone()),
+    //                             },
+    //                         );
+    //                         format!("  {}({}),\n", response_enum_name, type_definition.name)
+    //                     }
 
-                        None => format!("  {},\n", response_enum_name),
-                    },
-                    TransferMediaType::TextPlain => format!(
-                        "  {}({}),\n",
-                        response_enum_name,
-                        oas3_type_to_string(&oas3::spec::SchemaType::String)
-                    ),
-                },
-                None => {
-                    return Err(GeneratorError::StatusCodeError(
-                        "Failed to retrieve first response media type of status".to_owned(),
-                        status_code.to_string(),
-                    ))
-                }
-            },
-            _ => format!(
-                "{}({}),\n",
-                response_enum_name,
-                name_mapping.name_to_struct_name(
-                    &response_enum_definition_path,
-                    &format!("{}Value", entity.canonical_status_code)
-                ),
-            ),
-        };
-    }
+    //                     None => format!("  {},\n", response_enum_name),
+    //                 },
+    //                 TransferMediaType::TextPlain => format!(
+    //                     "  {}({}),\n",
+    //                     response_enum_name,
+    //                     oas3_type_to_string(&oas3::spec::SchemaType::String)
+    //                 ),
+    //             },
+    //             None => {
+    //                 return Err(GeneratorError::StatusCodeError(
+    //                     "Failed to retrieve first response media type of status".to_owned(),
+    //                     status_code.to_string(),
+    //                 ))
+    //             }
+    //         },
+    //         _ => format!(
+    //             "{}({}),\n",
+    //             response_enum_name,
+    //             name_mapping.name_to_struct_name(
+    //                 &response_enum_definition_path,
+    //                 &format!("{}Value", entity.canonical_status_code)
+    //             ),
+    //         ),
+    //     };
+    // }
 
-    response_enum_source_code += "  UndefinedResponse(reqwest::Response),\n";
-    response_enum_source_code += "}\n";
+    // response_enum_source_code += "  UndefinedResponse(reqwest::Response),\n";
+    // response_enum_source_code += "}\n";
 
     // Query params
     let query_parameter_code = generate_query_parameter_code(
@@ -320,8 +335,8 @@ pub fn generate_operation(
         .map(|m| m.to_use())
         .collect::<Vec<String>>()
         .join("\n");
-    request_source_code += "\n\n";
-    request_source_code += &response_enum_source_code;
+    // request_source_code += "\n\n";
+    // request_source_code += &response_enum_source_code;
     request_source_code += "\n";
     if !path_parameter_code.parameters_struct.properties.is_empty() {
         request_source_code += &path_parameter_code
@@ -626,6 +641,11 @@ pub fn generate_operation(
 
     // function
     request_source_code += "}\n";
+    let path_definition = PathDefinition {
+        response_entities,
+        used_modules: module_imports,
+        ..Default::default() // description,
+    };
     Ok(request_source_code)
 }
 
@@ -721,12 +741,6 @@ fn generate_path_parameter_code(
         parameters_struct: path_struct_definition,
         path_format_string: path_format_string,
     })
-}
-
-struct QueryParametersCode {
-    pub query_struct: StructDefinition,
-    pub query_struct_variable_name: String,
-    pub unroll_query_parameters_code: String,
 }
 
 fn generate_query_parameter_code(
@@ -1035,7 +1049,6 @@ fn generate_multi_request_type_functions(
             used_modules: module_imports.clone(),
             local_objects: HashMap::new(),
             properties: HashMap::new(),
-            description: None,
             ..Default::default()
         };
     }

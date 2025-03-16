@@ -1,25 +1,21 @@
 use std::collections::HashMap;
 
+use crate::generator::types::{
+    EnumDefinition, EnumValue, ModuleInfo, ObjectDefinition, PrimitiveDefinition,
+    PropertyDefinition, StructDefinition,
+};
 use oas3::{
     spec::{ObjectOrReference, ObjectSchema, SchemaTypeSet},
     Spec,
 };
 use tracing::{error, info, trace};
-use types::{
-    EnumDefinition, EnumValue, ModuleInfo, ObjectDefinition, PrimitiveDefinition,
-    PropertyDefinition, StructDefinition,
-};
 
 use crate::{
-    utils::{
-        config::{self, Config},
-        name_mapping::NameMapping,
-    },
+    utils::{config::Config, name_mapping::NameMapping},
     GeneratorError,
 };
 
 use super::{type_definition::get_type_from_schema, ObjectDatabase};
-pub mod types;
 
 pub fn get_components_base_path() -> Vec<String> {
     vec![
@@ -522,15 +518,7 @@ fn get_or_create_property(
     };
 
     let (property_type_definition_path, property_type_name, description) =
-        match get_object_or_ref_struct_name(spec, &definition_path, name_mapping, property_ref) {
-            Ok(type_naming_data) => type_naming_data,
-            Err(err) => {
-                return Err(GeneratorError::UnsupportedPropertyError(
-                    property_name.to_string(),
-                    err.to_string(),
-                ))
-            }
-        };
+        get_object_or_ref_struct_name(spec, &definition_path, name_mapping, property_ref)?;
 
     match get_type_from_schema(
         spec,

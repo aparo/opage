@@ -1,16 +1,11 @@
-use super::utils::{
-    generate_request_body, generate_responses, is_path_parameter, TransferMediaType,
-};
+use super::utils::{generate_request_body, generate_responses, is_path_parameter};
 use crate::{
     generator::component::{
-        object_definition::{
-            oas3_type_to_string,
-            types::{
-                ModuleInfo, ObjectDatabase, PathDatabase, PropertyDefinition, StructDefinition,
-                TypeDefinition,
-            },
-        },
-        type_definition::get_type_from_schema,
+        object_definition::oas3_type_to_string, type_definition::get_type_from_schema,
+    },
+    generator::types::{
+        ModuleInfo, ObjectDatabase, PathDatabase, PropertyDefinition, StructDefinition,
+        TransferMediaType, TypeDefinition,
     },
     utils::name_mapping::NameMapping,
     GeneratorError,
@@ -70,7 +65,7 @@ pub fn generate_operation(
     let operation_definition_path: Vec<String> = vec![path.to_owned()];
 
     let function_name = match operation.operation_id {
-        Some(ref operation_id) => name_mapping.name_to_module_name(operation_id, config.use_scope),
+        Some(ref operation_id) => name_mapping.name_to_module_name(operation_id),
         None => {
             return Err(GeneratorError::ParseError(
                 "No operation_id found".to_owned(),

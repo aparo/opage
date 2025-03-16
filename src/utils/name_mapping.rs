@@ -3,7 +3,7 @@ use reqwest::StatusCode;
 use serde::Deserialize;
 use std::collections::HashMap;
 
-use crate::GeneratorError;
+use crate::{generator::templates::rust::RUST_PRIMITIVE_TYPES, GeneratorError};
 
 #[derive(Deserialize, Clone, Debug, PartialEq)]
 pub struct NameMapping {
@@ -19,6 +19,9 @@ pub struct NameMapping {
     pub status_code_mapping: HashMap<String, String>,
     #[serde(default)]
     pub i32_to_u32: bool,
+    // Use scope for module names: propagated from config
+    #[serde(default)]
+    pub use_scope: bool,
 }
 
 fn path_to_string(path: &Vec<String>, token_name: &str) -> String {
@@ -39,11 +42,21 @@ impl NameMapping {
             struct_mapping: HashMap::new(),
             status_code_mapping: HashMap::new(),
             i32_to_u32: false,
+            use_scope: false,
         }
     }
 
+    pub fn set_scope(&mut self, use_scope: bool) {
+        self.use_scope = use_scope;
+    }
+
     pub fn name_to_struct_name(&self, path: &Vec<String>, name: &str) -> String {
-        let name = fix_struct_names(name);
+        for primitive_type in RUST_PRIMITIVE_TYPES.iter() {
+            if name.eq_ignore_ascii_case(primitive_type) {
+                return primitive_type.to_string();
+            }
+        }
+        let name = fix_struct_names(name, self.use_scope);
         let converted_name = convert_name(&name);
         let path_str = path_to_string(path, &converted_name);
 
@@ -114,7 +127,7 @@ impl NameMapping {
         }
     }
 
-    pub fn name_to_module_name(&self, name: &str, use_scope: bool) -> String {
+    pub fn name_to_module_name(&self, name: &str) -> String {
         let mut name = name;
         for pos in 0..9 {
             if name.ends_with(format!(".{}", pos).as_str()) {
@@ -127,7 +140,7 @@ impl NameMapping {
         match self.module_mapping.get(&converted_name) {
             Some(name) => name.clone(),
             None => {
-                if use_scope {
+                if self.use_scope {
                     if converted_name.contains(".") || converted_name.contains("::") {
                         converted_name
                     } else {
@@ -239,7 +252,7 @@ pub fn convert_name(name: &str) -> String {
     converted_name
 }
 
-pub fn fix_struct_names(name: &str) -> String {
+pub fn fix_struct_names(name: &str, use_scope: bool) -> String {
     let mut name = name.replace(".", "::");
     if name.contains("___") {
         let parts: Vec<&str> = name.split("___").collect();
@@ -260,7 +273,11 @@ pub fn fix_struct_names(name: &str) -> String {
         }
     }
     if !name.contains("::") {
-        name = format!("common::{}", name.clone());
+        if use_scope {
+            name = format!("common::{}", name.clone());
+        } else {
+            name = format!("models::{}", name.clone());
+        }
     }
     name
 }
@@ -321,7 +338,7 @@ mod tests {
     #[test]
     fn test_fix_struct_names() {
         let name = "_common___Metadata";
-        let fixed_name = fix_struct_names(name);
+        let fixed_name = fix_struct_names(name, true);
         assert_eq!(fixed_name, "common::Metadata");
     }
 
