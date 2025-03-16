@@ -13,8 +13,9 @@ use crate::{
             object_definition::oas3_type_to_string, type_definition::get_type_from_schema,
         },
         types::{
-            ModuleInfo, ObjectDatabase, PathDatabase, PathDefinition, PropertyDefinition,
-            QueryParametersCode, RequestEntity, StructDefinition, TransferMediaType,
+            ModuleInfo, ObjectDatabase, PathDatabase, PathDefinition, PathParameters,
+            PropertyDefinition, QueryParameters, RequestEntity, StructDefinition,
+            TransferMediaType,
         },
     },
     utils::{config::Config, name_mapping::NameMapping},
@@ -63,7 +64,7 @@ pub fn generate_operation(
     )?;
 
     // Path parameters
-    let path_parameter_code = generate_path_parameter_code(
+    let path_parameters = generate_path_parameters(
         &operation_definition_path,
         name_mapping,
         &function_name,
@@ -93,7 +94,7 @@ pub fn generate_operation(
     let mut response_enum_definition_path = operation_definition_path.clone();
     response_enum_definition_path.push(response_enum_name.clone());
 
-    let mut request_source_code = String::new();
+    // let mut request_source_code = String::new();
 
     let mut module_imports = vec![ModuleInfo {
         name: "reqwest".to_owned(),
@@ -260,393 +261,400 @@ pub fn generate_operation(
         None => None,
     };
 
-    let request_body_content_types_count = match request_body {
-        Some(ref request_body) => request_body.content.len(),
-        None => 0,
-    };
+    // let request_body_content_types_count = match request_body {
+    //     Some(ref request_body) => request_body.content.len(),
+    //     None => 0,
+    // };
 
-    let multi_content_request_body = request_body_content_types_count > 1;
+    // let multi_content_request_body = request_body_content_types_count > 1;
 
-    let multi_request_type_source_code = match request_body {
-        Some(ref request_entity) => match generate_multi_request_type_functions(
-            &operation_definition_path,
-            name_mapping,
-            &function_name,
-            &path_parameter_code,
-            &mut module_imports,
-            &query_parameter_code,
-            &response_enum_name,
-            method,
-            request_entity,
-        ) {
-            Some(request_code) => request_code,
-            None => String::new(),
-        },
+    // let multi_request_type_source_code = match request_body {
+    //     Some(ref request_entity) => match generate_multi_request_type_functions(
+    //         &operation_definition_path,
+    //         name_mapping,
+    //         &function_name,
+    //         &path_parameters,
+    //         &mut module_imports,
+    //         &query_parameter_code,
+    //         &response_enum_name,
+    //         method,
+    //         request_entity,
+    //     ) {
+    //         Some(request_code) => request_code,
+    //         None => String::new(),
+    //     },
 
-        None => String::new(),
-    };
+    //     None => String::new(),
+    // };
 
-    let mut function_parameters = match multi_content_request_body {
-        true => vec!["request_builder: reqwest::RequestBuilder".to_owned()],
-        false => vec![
-            "client: &reqwest::Client".to_owned(),
-            "server: &str".to_owned(),
-        ],
-    };
+    // let mut function_parameters = match multi_content_request_body {
+    //     true => vec!["request_builder: reqwest::RequestBuilder".to_owned()],
+    //     false => vec![
+    //         "client: &reqwest::Client".to_owned(),
+    //         "server: &str".to_owned(),
+    //     ],
+    // };
 
-    let request_content_variable_name = match multi_content_request_body {
-        true => String::new(),
-        false => name_mapping.name_to_property_name(&operation_definition_path, "content"),
-    };
+    // let request_content_variable_name = match multi_content_request_body {
+    //     true => String::new(),
+    //     false => name_mapping.name_to_property_name(&operation_definition_path, "content"),
+    // };
 
-    if !multi_content_request_body {
-        if let Some(request_body) = &request_body {
-            for (_, transfer_media_type) in &request_body.content {
-                match transfer_media_type {
-                    TransferMediaType::ApplicationJson(ref type_definition_opt) => {
-                        match type_definition_opt {
-                            Some(ref type_definition) => {
-                                if let Some(ref module) = type_definition.module {
-                                    if !module_imports.contains(module) {
-                                        module_imports.push(module.clone());
-                                    }
-                                }
-                                function_parameters.push(format!(
-                                    "{}: {}",
-                                    request_content_variable_name, type_definition.name
-                                ))
-                            }
-                            None => trace!("Empty request body not added to function params"),
-                        }
-                    }
-                    TransferMediaType::TextPlain => function_parameters.push(format!(
-                        "{}: &{}",
-                        request_content_variable_name,
-                        oas3_type_to_string(&oas3::spec::SchemaType::String)
-                    )),
-                }
-            }
-        }
-    }
+    // if !multi_content_request_body {
+    //     if let Some(request_body) = &request_body {
+    //         for (_, transfer_media_type) in &request_body.content {
+    //             match transfer_media_type {
+    //                 TransferMediaType::ApplicationJson(ref type_definition_opt) => {
+    //                     match type_definition_opt {
+    //                         Some(ref type_definition) => {
+    //                             if let Some(ref module) = type_definition.module {
+    //                                 if !module_imports.contains(module) {
+    //                                     module_imports.push(module.clone());
+    //                                 }
+    //                             }
+    //                             function_parameters.push(format!(
+    //                                 "{}: {}",
+    //                                 request_content_variable_name, type_definition.name
+    //                             ))
+    //                         }
+    //                         None => trace!("Empty request body not added to function params"),
+    //                     }
+    //                 }
+    //                 TransferMediaType::TextPlain => function_parameters.push(format!(
+    //                     "{}: &{}",
+    //                     request_content_variable_name,
+    //                     oas3_type_to_string(&oas3::spec::SchemaType::String)
+    //                 )),
+    //             }
+    //         }
+    //     }
+    // }
 
     trace!("Generating source code");
-    request_source_code += &module_imports
-        .iter()
-        .map(|m| m.to_use())
-        .collect::<Vec<String>>()
-        .join("\n");
+    // manage imports
+    // request_source_code += &module_imports
+    //     .iter()
+    //     .map(|m| m.to_use())
+    //     .collect::<Vec<String>>()
+    //     .join("\n");
     // request_source_code += "\n\n";
     // request_source_code += &response_enum_source_code;
-    request_source_code += "\n";
-    if !path_parameter_code.parameters_struct.properties.is_empty() {
-        request_source_code += &path_parameter_code
-            .parameters_struct
-            .to_string(false, config);
-        request_source_code += "\n";
-    }
+    // request_source_code += "\n";
+    // if !path_parameters.parameters_struct.properties.is_empty() {
+    //     request_source_code += &path_parameters
+    //         .parameters_struct
+    //         .to_string(false, config);
+    //     request_source_code += "\n";
+    // }
 
-    if query_parameter_code.query_struct.properties.len() > 0 {
-        request_source_code += &query_parameter_code.query_struct.to_string(false, config);
-    }
+    // if query_parameter_code.query_struct.properties.len() > 0 {
+    //     request_source_code += &query_parameter_code.query_struct.to_string(false, config);
+    // }
 
-    request_source_code += "\n";
+    // request_source_code += "\n";
 
-    request_source_code += &multi_request_type_source_code;
+    // request_source_code += &multi_request_type_source_code;
 
-    request_source_code += "\n";
+    // request_source_code += "\n";
 
-    if !multi_content_request_body && path_parameter_code.parameters_struct.properties.len() > 0 {
-        function_parameters.push(format!(
-            "{}: &{}",
-            path_parameter_code.parameters_struct_variable_name,
-            path_parameter_code.parameters_struct.name
-        ));
-    }
+    // if !multi_content_request_body && path_parameters.parameters_struct.properties.len() > 0 {
+    //     function_parameters.push(format!(
+    //         "{}: &{}",
+    //         path_parameters.parameters_struct_variable_name,
+    //         path_parameters.parameters_struct.name
+    //     ));
+    // }
 
-    let query_struct = &query_parameter_code.query_struct;
-    if query_struct.properties.len() > 0 {
-        function_parameters.push(format!(
-            "{}: &{}",
-            query_parameter_code.query_struct_variable_name, query_struct.name
-        ));
-    }
+    // let query_struct = &query_parameter_code.query_struct;
+    // if query_struct.properties.len() > 0 {
+    //     function_parameters.push(format!(
+    //         "{}: &{}",
+    //         query_parameter_code.query_struct_variable_name, query_struct.name
+    //     ));
+    // }
 
-    let function_visibility = match multi_content_request_body {
-        true => "",
-        false => "pub",
-    };
+    // let function_visibility = match multi_content_request_body {
+    //     true => "",
+    //     false => "pub",
+    // };
 
     // Function signature
-    request_source_code += &format!(
-        "{} async fn {}({}) -> Result<{}, reqwest::Error> {{\n",
-        function_visibility,
-        name_mapping.extract_function_name(&function_name),
-        function_parameters.join(", "),
-        response_enum_name,
-    );
+    // request_source_code += &format!(
+    //     "{} async fn {}({}) -> Result<{}, reqwest::Error> {{\n",
+    //     function_visibility,
+    //     name_mapping.extract_function_name(&function_name),
+    //     function_parameters.join(", "),
+    //     response_enum_name,
+    // );
 
-    request_source_code += &query_parameter_code.unroll_query_parameters_code;
+    // request_source_code += &query_parameter_code.unroll_query_parameters_code;
 
-    if !multi_content_request_body {
-        match request_body {
-            Some(ref request_body) => {
-                for (_, transfer_media_type) in &request_body.content {
-                    match transfer_media_type {
-                        TransferMediaType::TextPlain => {
-                            request_source_code += &format!(
-                                "  let body = {}.to_owned();\n",
-                                request_content_variable_name
-                            )
-                        }
-                        _ => (),
-                    }
+    // if !multi_content_request_body {
+    //     match request_body {
+    //         Some(ref request_body) => {
+    //             for (_, transfer_media_type) in &request_body.content {
+    //                 match transfer_media_type {
+    //                     TransferMediaType::TextPlain => {
+    //                         request_source_code += &format!(
+    //                             "  let body = {}.to_owned();\n",
+    //                             request_content_variable_name
+    //                         )
+    //                     }
+    //                     _ => (),
+    //                 }
 
-                    // TODO: multiple request types not supported
-                    break;
-                }
-            }
-            None => (),
-        }
-    }
+    //                 // TODO: multiple request types not supported
+    //                 break;
+    //             }
+    //         }
+    //         None => (),
+    //     }
+    // }
 
-    let body_build = match request_body {
-        Some(request_body) => {
-            let mut body = String::new();
-            for (_, transfer_media_type) in request_body.content {
-                match transfer_media_type {
-                    TransferMediaType::ApplicationJson(type_definition) => match type_definition {
-                        Some(_) => body = format!(".json(&{})", request_content_variable_name),
-                        None => body = ".json(&serde_json::json!({}))".to_owned(),
-                    },
-                    TransferMediaType::TextPlain => body = ".body(body)".to_owned(),
-                }
+    // let body_build = match request_body {
+    //     Some(request_body) => {
+    //         let mut body = String::new();
+    //         for (_, transfer_media_type) in request_body.content {
+    //             match transfer_media_type {
+    //                 TransferMediaType::ApplicationJson(type_definition) => match type_definition {
+    //                     Some(_) => body = format!(".json(&{})", request_content_variable_name),
+    //                     None => body = ".json(&serde_json::json!({}))".to_owned(),
+    //                 },
+    //                 TransferMediaType::TextPlain => body = ".body(body)".to_owned(),
+    //             }
 
-                // TODO: multiple request types not supported
-                break;
-            }
-            body
-        }
-        None => String::new(),
-    };
+    //             // TODO: multiple request types not supported
+    //             break;
+    //         }
+    //         body
+    //     }
+    //     None => String::new(),
+    // };
 
-    match request_body_content_types_count {
-        0 | 1 => request_source_code += &format!(
-            "    let response = match client.{}(format!(\"{{server}}{}\", {})).query(&request_query_parameters){}.send().await\n",
-            method.as_str().to_lowercase(),
-            path_parameter_code.path_format_string,
-            path_parameter_code.parameters_struct.properties.iter().map(|(_, parameter)| format!("{}.{}", &path_parameter_code.parameters_struct_variable_name, name_mapping.name_to_property_name(&operation_definition_path, &parameter.name))).collect::<Vec<String>>().join(","),
-            body_build
-        ),
-        _ => request_source_code += &format!(
-            "    let response = match request_builder.query(&request_query_parameters).send().await\n",
-        )
-    };
+    // match request_body_content_types_count {
+    //     0 | 1 => request_source_code += &format!(
+    //         "    let response = match client.{}(format!(\"{{server}}{}\", {})).query(&request_query_parameters){}.send().await\n",
+    //         method.as_str().to_lowercase(),
+    //         path_parameters.path_format_string,
+    //         path_parameters.parameters_struct.properties.iter().map(|(_, parameter)| format!("{}.{}", &path_parameters.parameters_struct_variable_name, name_mapping.name_to_property_name(&operation_definition_path, &parameter.name))).collect::<Vec<String>>().join(","),
+    //         body_build
+    //     ),
+    //     _ => request_source_code += &format!(
+    //         "    let response = match request_builder.query(&request_query_parameters).send().await\n",
+    //     )
+    // };
 
-    request_source_code += "    {\n";
-    request_source_code += "        Ok(response) => response,\n";
-    request_source_code += "        Err(err) => return Err(err),\n";
-    request_source_code += "    };\n";
+    // request_source_code += "    {\n";
+    // request_source_code += "        Ok(response) => response,\n";
+    // request_source_code += "        Err(err) => return Err(err),\n";
+    // request_source_code += "    };\n";
 
-    if has_response_any_multi_content_type {
-        request_source_code += "  let content_type = match response\n";
-        request_source_code += "      .headers()\n";
-        request_source_code += "      .get(\"content-type\") {\n";
-        request_source_code += "      Some(content_type) => match content_type.to_str()\n";
-        request_source_code += "      {\n";
-        request_source_code += "          Ok(content_type) => content_type,\n";
-        request_source_code += "          Err(_) => \"text/plain\",\n";
-        request_source_code += "      },\n";
-        request_source_code += &format!(
-            "      None => return Ok({}::UndefinedResponse(response))\n",
-            response_enum_name
-        );
-        request_source_code += "    };\n\n";
-    }
+    // if has_response_any_multi_content_type {
+    //     request_source_code += "  let content_type = match response\n";
+    //     request_source_code += "      .headers()\n";
+    //     request_source_code += "      .get(\"content-type\") {\n";
+    //     request_source_code += "      Some(content_type) => match content_type.to_str()\n";
+    //     request_source_code += "      {\n";
+    //     request_source_code += "          Ok(content_type) => content_type,\n";
+    //     request_source_code += "          Err(_) => \"text/plain\",\n";
+    //     request_source_code += "      },\n";
+    //     request_source_code += &format!(
+    //         "      None => return Ok({}::UndefinedResponse(response))\n",
+    //         response_enum_name
+    //     );
+    //     request_source_code += "    };\n\n";
+    // }
 
-    request_source_code += "    match response.status().as_u16() {\n";
+    // request_source_code += "    match response.status().as_u16() {\n";
 
-    for (response_key, entity) in &response_entities {
-        if entity.content.len() > 1 {
-            // Multi content type response
-            request_source_code += &format!("     {} => match content_type {{\n", response_key);
+    // for (response_key, entity) in &response_entities {
+    //     if entity.content.len() > 1 {
+    //         // Multi content type response
+    //         request_source_code += &format!("     {} => match content_type {{\n", response_key);
 
-            for (content_type, transfer_media_type) in &entity.content {
-                match transfer_media_type {
-                    TransferMediaType::ApplicationJson(ref type_definition) => {
-                        match type_definition {
-                            Some(type_definition) => {
-                                request_source_code += &format!(
-                                    "      \"{}\" => match response.json::<{}>().await {{\n",
-                                    content_type, type_definition.name
-                                );
+    //         for (content_type, transfer_media_type) in &entity.content {
+    //             match transfer_media_type {
+    //                 TransferMediaType::ApplicationJson(ref type_definition) => {
+    //                     match type_definition {
+    //                         Some(type_definition) => {
+    //                             request_source_code += &format!(
+    //                                 "      \"{}\" => match response.json::<{}>().await {{\n",
+    //                                 content_type, type_definition.name
+    //                             );
 
-                                request_source_code += &format!(
-                                    "      Ok({}) => Ok({}::{}({}::{}({}))),\n",
-                                    name_mapping.name_to_property_name(
-                                        &operation_definition_path,
-                                        &type_definition.name
-                                    ),
-                                    response_enum_name,
-                                    name_mapping.name_to_struct_name(
-                                        &operation_definition_path,
-                                        &entity.canonical_status_code
-                                    ),
-                                    name_mapping.name_to_struct_name(
-                                        &response_enum_definition_path,
-                                        &format!("{}Value", &entity.canonical_status_code)
-                                    ),
-                                    media_type_enum_name(
-                                        &response_enum_definition_path,
-                                        &name_mapping,
-                                        &TransferMediaType::ApplicationJson(None)
-                                    ),
-                                    name_mapping.name_to_property_name(
-                                        &operation_definition_path,
-                                        &type_definition.name
-                                    )
-                                );
-                                request_source_code +=
-                                    "      Err(parsing_error) => Err(parsing_error)\n";
-                                request_source_code += "    }\n"
-                            }
-                            None => {
-                                request_source_code += &format!(
-                                    "      \"{}\" => Ok({}::{}({}::{})),\n",
-                                    content_type,
-                                    response_enum_name,
-                                    name_mapping.name_to_struct_name(
-                                        &operation_definition_path,
-                                        &entity.canonical_status_code
-                                    ),
-                                    name_mapping.name_to_struct_name(
-                                        &response_enum_definition_path,
-                                        &format!("{}Value", &entity.canonical_status_code)
-                                    ),
-                                    media_type_enum_name(
-                                        &response_enum_definition_path,
-                                        &name_mapping,
-                                        &TransferMediaType::ApplicationJson(None)
-                                    )
-                                );
-                            }
-                        }
-                    }
-                    TransferMediaType::TextPlain => {
-                        request_source_code += &format!(
-                            "    \"{}\" => match response.text().await {{\n",
-                            content_type
-                        );
+    //                             request_source_code += &format!(
+    //                                 "      Ok({}) => Ok({}::{}({}::{}({}))),\n",
+    //                                 name_mapping.name_to_property_name(
+    //                                     &operation_definition_path,
+    //                                     &type_definition.name
+    //                                 ),
+    //                                 response_enum_name,
+    //                                 name_mapping.name_to_struct_name(
+    //                                     &operation_definition_path,
+    //                                     &entity.canonical_status_code
+    //                                 ),
+    //                                 name_mapping.name_to_struct_name(
+    //                                     &response_enum_definition_path,
+    //                                     &format!("{}Value", &entity.canonical_status_code)
+    //                                 ),
+    //                                 media_type_enum_name(
+    //                                     &response_enum_definition_path,
+    //                                     &name_mapping,
+    //                                     &TransferMediaType::ApplicationJson(None)
+    //                                 ),
+    //                                 name_mapping.name_to_property_name(
+    //                                     &operation_definition_path,
+    //                                     &type_definition.name
+    //                                 )
+    //                             );
+    //                             request_source_code +=
+    //                                 "      Err(parsing_error) => Err(parsing_error)\n";
+    //                             request_source_code += "    }\n"
+    //                         }
+    //                         None => {
+    //                             request_source_code += &format!(
+    //                                 "      \"{}\" => Ok({}::{}({}::{})),\n",
+    //                                 content_type,
+    //                                 response_enum_name,
+    //                                 name_mapping.name_to_struct_name(
+    //                                     &operation_definition_path,
+    //                                     &entity.canonical_status_code
+    //                                 ),
+    //                                 name_mapping.name_to_struct_name(
+    //                                     &response_enum_definition_path,
+    //                                     &format!("{}Value", &entity.canonical_status_code)
+    //                                 ),
+    //                                 media_type_enum_name(
+    //                                     &response_enum_definition_path,
+    //                                     &name_mapping,
+    //                                     &TransferMediaType::ApplicationJson(None)
+    //                                 )
+    //                             );
+    //                         }
+    //                     }
+    //                 }
+    //                 TransferMediaType::TextPlain => {
+    //                     request_source_code += &format!(
+    //                         "    \"{}\" => match response.text().await {{\n",
+    //                         content_type
+    //                     );
 
-                        request_source_code += &format!(
-                            "      Ok(response_text) => Ok({}::{}({}::{}(response_text))),\n",
-                            response_enum_name,
-                            name_mapping.name_to_struct_name(
-                                &operation_definition_path,
-                                &entity.canonical_status_code
-                            ),
-                            name_mapping.name_to_struct_name(
-                                &response_enum_definition_path,
-                                &format!("{}Value", &entity.canonical_status_code)
-                            ),
-                            media_type_enum_name(
-                                &response_enum_definition_path,
-                                &name_mapping,
-                                &TransferMediaType::TextPlain
-                            )
-                        );
-                        request_source_code += "      Err(parsing_error) => Err(parsing_error)\n";
-                        request_source_code += "    }\n"
-                    }
-                }
-            }
+    //                     request_source_code += &format!(
+    //                         "      Ok(response_text) => Ok({}::{}({}::{}(response_text))),\n",
+    //                         response_enum_name,
+    //                         name_mapping.name_to_struct_name(
+    //                             &operation_definition_path,
+    //                             &entity.canonical_status_code
+    //                         ),
+    //                         name_mapping.name_to_struct_name(
+    //                             &response_enum_definition_path,
+    //                             &format!("{}Value", &entity.canonical_status_code)
+    //                         ),
+    //                         media_type_enum_name(
+    //                             &response_enum_definition_path,
+    //                             &name_mapping,
+    //                             &TransferMediaType::TextPlain
+    //                         )
+    //                     );
+    //                     request_source_code += "      Err(parsing_error) => Err(parsing_error)\n";
+    //                     request_source_code += "    }\n"
+    //                 }
+    //             }
+    //         }
 
-            request_source_code += &format!(
-                "      _ => Ok({}::UndefinedResponse(response))\n",
-                response_enum_name
-            );
+    //         request_source_code += &format!(
+    //             "      _ => Ok({}::UndefinedResponse(response))\n",
+    //             response_enum_name
+    //         );
 
-            // Close content_type match
-            request_source_code += "}\n"
-        } else {
-            // Single content type response
-            for (_, transfer_media_type) in &entity.content {
-                match transfer_media_type {
-                    TransferMediaType::ApplicationJson(ref type_definition) => {
-                        match type_definition {
-                            Some(type_definition) => {
-                                request_source_code += &format!(
-                                    "    {} => match response.json::<{}>().await {{\n",
-                                    response_key, type_definition.name
-                                );
+    //         // Close content_type match
+    //         request_source_code += "}\n"
+    //     } else {
+    //         // Single content type response
+    //         for (_, transfer_media_type) in &entity.content {
+    //             match transfer_media_type {
+    //                 TransferMediaType::ApplicationJson(ref type_definition) => {
+    //                     match type_definition {
+    //                         Some(type_definition) => {
+    //                             request_source_code += &format!(
+    //                                 "    {} => match response.json::<{}>().await {{\n",
+    //                                 response_key, type_definition.name
+    //                             );
 
-                                request_source_code += &format!(
-                                    "    Ok({}) => Ok({}::{}({})),\n",
-                                    name_mapping.name_to_property_name(
-                                        &operation_definition_path,
-                                        &type_definition.name
-                                    ),
-                                    response_enum_name,
-                                    name_mapping.name_to_struct_name(
-                                        &operation_definition_path,
-                                        &entity.canonical_status_code
-                                    ),
-                                    name_mapping.name_to_property_name(
-                                        &operation_definition_path,
-                                        &type_definition.name
-                                    )
-                                );
-                                request_source_code += "Err(parsing_error) => Err(parsing_error)\n";
-                                request_source_code += "}\n"
-                            }
-                            None => {
-                                request_source_code += &format!(
-                                    "    {} => Ok({}::{}),\n",
-                                    response_key,
-                                    response_enum_name,
-                                    name_mapping.name_to_struct_name(
-                                        &operation_definition_path,
-                                        &entity.canonical_status_code
-                                    )
-                                );
-                            }
-                        }
-                    }
-                    TransferMediaType::TextPlain => {
-                        request_source_code +=
-                            &format!("    {} => match response.text().await {{\n", response_key);
+    //                             request_source_code += &format!(
+    //                                 "    Ok({}) => Ok({}::{}({})),\n",
+    //                                 name_mapping.name_to_property_name(
+    //                                     &operation_definition_path,
+    //                                     &type_definition.name
+    //                                 ),
+    //                                 response_enum_name,
+    //                                 name_mapping.name_to_struct_name(
+    //                                     &operation_definition_path,
+    //                                     &entity.canonical_status_code
+    //                                 ),
+    //                                 name_mapping.name_to_property_name(
+    //                                     &operation_definition_path,
+    //                                     &type_definition.name
+    //                                 )
+    //                             );
+    //                             request_source_code += "Err(parsing_error) => Err(parsing_error)\n";
+    //                             request_source_code += "}\n"
+    //                         }
+    //                         None => {
+    //                             request_source_code += &format!(
+    //                                 "    {} => Ok({}::{}),\n",
+    //                                 response_key,
+    //                                 response_enum_name,
+    //                                 name_mapping.name_to_struct_name(
+    //                                     &operation_definition_path,
+    //                                     &entity.canonical_status_code
+    //                                 )
+    //                             );
+    //                         }
+    //                     }
+    //                 }
+    //                 TransferMediaType::TextPlain => {
+    //                     request_source_code +=
+    //                         &format!("    {} => match response.text().await {{\n", response_key);
 
-                        request_source_code += &format!(
-                            "      Ok(response_text) => Ok({}::{}(response_text)),\n",
-                            response_enum_name,
-                            name_mapping.name_to_struct_name(
-                                &operation_definition_path,
-                                &entity.canonical_status_code
-                            )
-                        );
-                        request_source_code += "      Err(parsing_error) => Err(parsing_error)\n";
-                        request_source_code += "    }\n"
-                    }
-                }
-            }
-        }
-    }
+    //                     request_source_code += &format!(
+    //                         "      Ok(response_text) => Ok({}::{}(response_text)),\n",
+    //                         response_enum_name,
+    //                         name_mapping.name_to_struct_name(
+    //                             &operation_definition_path,
+    //                             &entity.canonical_status_code
+    //                         )
+    //                     );
+    //                     request_source_code += "      Err(parsing_error) => Err(parsing_error)\n";
+    //                     request_source_code += "    }\n"
+    //                 }
+    //             }
+    //         }
+    //     }
+    // }
 
-    request_source_code += &format!(
-        "    _ => Ok({}::UndefinedResponse(response))\n",
-        response_enum_name
-    );
+    // request_source_code += &format!(
+    //     "    _ => Ok({}::UndefinedResponse(response))\n",
+    //     response_enum_name
+    // );
 
     // Close match status code
-    request_source_code += "  }\n";
+    // request_source_code += "  }\n";
 
     // function
-    request_source_code += "}\n";
+    // request_source_code += "}\n";
     let path_definition = PathDefinition {
+        name: function_name.clone(),
         response_entities,
         used_modules: module_imports,
+        request_body,
+        path_parameters: path_parameters,
+        query_parameters: query_parameter_code,
+        description: description.to_owned(),
         ..Default::default() // description,
     };
-    Ok(request_source_code)
+    path_database.insert(function_name, path_definition);
+    Ok(String::new())
 }
 
 fn media_type_enum_name(
@@ -661,18 +669,12 @@ fn media_type_enum_name(
     name_mapping.name_to_struct_name(definition_path, name)
 }
 
-struct PathParameterCode {
-    pub parameters_struct_variable_name: String,
-    pub parameters_struct: StructDefinition,
-    pub path_format_string: String,
-}
-
-fn generate_path_parameter_code(
+fn generate_path_parameters(
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
     function_name: &str,
     path: &str,
-) -> Result<PathParameterCode, GeneratorError> {
+) -> Result<PathParameters, GeneratorError> {
     trace!("Generating path parameters");
     let path_parameters_struct_name = name_mapping.name_to_struct_name(
         &definition_path,
@@ -735,7 +737,7 @@ fn generate_path_parameter_code(
         .collect::<Vec<String>>()
         .join("/");
 
-    Ok(PathParameterCode {
+    Ok(PathParameters {
         parameters_struct_variable_name: name_mapping
             .name_to_property_name(definition_path, "path_parameters"),
         parameters_struct: path_struct_definition,
@@ -751,7 +753,7 @@ fn generate_query_parameter_code(
     object_database: &ObjectDatabase,
     function_name: &str,
     config: &Config,
-) -> Result<QueryParametersCode, GeneratorError> {
+) -> Result<QueryParameters, GeneratorError> {
     trace!("Generating query params");
     let mapping_name = name_mapping.name_to_struct_name(
         &definition_path,
@@ -899,7 +901,7 @@ fn generate_query_parameter_code(
         unroll_query_parameters_code += "}\n"
     }
 
-    Ok(QueryParametersCode {
+    Ok(QueryParameters {
         query_struct_variable_name,
         query_struct,
         unroll_query_parameters_code,
@@ -910,9 +912,9 @@ fn generate_multi_request_type_functions(
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
     function_name: &str,
-    path_parameter_code: &PathParameterCode,
+    path_parameters: &PathParameters,
     module_imports: &mut Vec<ModuleInfo>,
-    query_parameter_code: &QueryParametersCode,
+    query_parameter_code: &QueryParameters,
     response_enum_name: &str,
     method: &reqwest::Method,
     request_entity: &RequestEntity,
@@ -937,11 +939,11 @@ fn generate_multi_request_type_functions(
             "server: &str".to_owned(),
         ];
 
-        if path_parameter_code.parameters_struct.properties.len() > 0 {
+        if path_parameters.parameters_struct.properties.len() > 0 {
             function_parameters.push(format!(
                 "{}: &{}",
-                path_parameter_code.parameters_struct_variable_name,
-                path_parameter_code.parameters_struct.name
+                path_parameters.parameters_struct_variable_name,
+                path_parameters.parameters_struct.name
             ));
         }
 
@@ -1013,14 +1015,14 @@ fn generate_multi_request_type_functions(
         request_source_code += &format!(
             "  let request_builder = client.{}(format!(\"{{server}}{}\", {})){};\n",
             method.as_str().to_lowercase(),
-            path_parameter_code.path_format_string,
-            path_parameter_code
+            path_parameters.path_format_string,
+            path_parameters
                 .parameters_struct
                 .properties
                 .iter()
                 .map(|(_, parameter)| format!(
                     "{}.{}",
-                    path_parameter_code.parameters_struct_variable_name,
+                    path_parameters.parameters_struct_variable_name,
                     name_mapping.name_to_property_name(&definition_path, &parameter.name)
                 ))
                 .collect::<Vec<String>>()

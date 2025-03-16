@@ -7,7 +7,7 @@ use askama::Template;
 use dashmap::DashMap;
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ModuleInfo {
     pub name: String,
     pub path: String,
@@ -301,10 +301,17 @@ pub struct RequestEntity {
 pub type ResponseEntities = HashMap<String, ResponseEntity>;
 
 #[derive(Clone, Debug, Default)]
-pub struct QueryParametersCode {
+pub struct QueryParameters {
     pub query_struct: StructDefinition,
     pub query_struct_variable_name: String,
     pub unroll_query_parameters_code: String,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct PathParameters {
+    pub parameters_struct_variable_name: String,
+    pub parameters_struct: StructDefinition,
+    pub path_format_string: String,
 }
 
 #[derive(Clone, Debug)]
@@ -317,7 +324,9 @@ pub struct PathDefinition {
     pub local_objects: HashMap<String, Box<ObjectDefinition>>,
     pub description: String,
     pub response_entities: ResponseEntities,
-    pub query_parameters: QueryParametersCode,
+    pub path_parameters: PathParameters,
+    pub query_parameters: QueryParameters,
+    pub request_body: Option<RequestEntity>,
 }
 
 impl Default for PathDefinition {
@@ -331,23 +340,34 @@ impl Default for PathDefinition {
             local_objects: HashMap::new(),
             description: "".to_string(),
             response_entities: HashMap::new(),
-            query_parameters: QueryParametersCode {
-                query_struct: StructDefinition {
-                    package: "".to_string(),
-                    name: "".to_string(),
-                    used_modules: vec![],
-                    properties: HashMap::new(),
-                    local_objects: HashMap::new(),
-                    description: None,
-                },
-                query_struct_variable_name: "".to_string(),
-                unroll_query_parameters_code: "".to_string(),
-            },
+            path_parameters: PathParameters::default(),
+            query_parameters: QueryParameters::default(),
+            request_body: None,
         }
     }
 }
 
 impl PathDefinition {
+    pub fn get_required_properties(&self) -> Vec<PropertyDefinition> {
+        let mut required_properties = vec![];
+        for (_, property) in &self.path_parameters.parameters_struct.properties {
+            if property.required {
+                required_properties.push(property.clone());
+            }
+        }
+        for (_, property) in &self.query_parameters.query_struct.properties {
+            if property.required {
+                required_properties.push(property.clone());
+            }
+        }
+        for (_, property) in &self.properties {
+            if property.required {
+                required_properties.push(property.clone());
+            }
+        }
+        required_properties
+    }
+
     pub fn extract_response_modules(&self) -> Vec<ModuleInfo> {
         let mut module_imports: Vec<ModuleInfo> = vec![];
         for (_, entity) in &self.response_entities {

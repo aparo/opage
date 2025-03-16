@@ -21,179 +21,179 @@ tags:
     description: List and describe the various models available.
 
 paths:
-  /generate:
-    post:
-      operationId: generateCompletion
-      tags:
-        - Completions
-      summary: Generate a response for a given prompt with a provided model.
-      description: The final response object will include statistics and additional data from the request.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GenerateCompletionRequest'
-      responses:
-        '200':
-          description: Successful operation.
-          content:
-            application/x-ndjson:
-              schema:
-                $ref: '#/components/schemas/GenerateCompletionResponse'
-  /chat:
-    post:
-      operationId: generateChatCompletion
-      tags:
-        - Chat
-      summary: Generate the next message in a chat with a provided model.
-      description: This is a streaming endpoint, so there will be a series of responses. The final response object will include statistics and additional data from the request.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GenerateChatCompletionRequest'
-      responses:
-        '200':
-          description: Successful operation.
-          content:
-            application/x-ndjson:
-              schema:
-                $ref: '#/components/schemas/GenerateChatCompletionResponse'
-  /embeddings:
-    post:
-      operationId: generateEmbedding
-      tags:
-        - Embeddings
-      summary: Generate embeddings from a model.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/GenerateEmbeddingRequest'
-      responses:
-        '200':
-          description: Successful operation.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GenerateEmbeddingResponse'
-  /create:
-    post:
-      operationId: createModel
-      tags:
-        - Models
-      summary: Create a model from a Modelfile.
-      description: It is recommended to set `modelfile` to the content of the Modelfile rather than just set `path`. This is a requirement for remote create. Remote model creation should also create any file blobs, fields such as `FROM` and `ADAPTER`, explicitly with the server using Create a Blob and the value to the path indicated in the response.
-      requestBody:
-        description: Create a new model from a Modelfile.
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateModelRequest'
-      responses:
-        '200':
-          description: Successful operation.
-          content:
-            application/x-ndjson:
-              schema:
-                $ref: '#/components/schemas/CreateModelResponse'
-  /tags:
-    get:
-      operationId: listModels
-      tags:
-        - Models
-      summary: List models that are available locally.
-      responses:
-        '200':
-          description: Successful operation.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ModelsResponse'
-  /show:
-    post:
-      operationId: showModelInfo
-      tags:
-        - Models
-      summary: Show details about a model including modelfile, template, parameters, license, and system prompt.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ModelInfoRequest'
-      responses:
-        '200':
-          description: Successful operation.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ModelInfo'
-  /copy:
-    post:
-      operationId: copyModel
-      tags:
-        - Models
-      summary: Creates a model with another name from an existing model.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CopyModelRequest'
-      responses:
-        '200':
-          description: Successful operation.
-  /delete:
-    delete:
-      operationId: deleteModel
-      tags:
-        - Models
-      summary: Delete a model and its data.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DeleteModelRequest'
-      responses:
-        '200':
-          description: Successful operation.
-  /pull:
-    post:
-      operationId: pullModel
-      tags:
-        - Models
-      summary: Download a model from the ollama library.
-      description: Cancelled pulls are resumed from where they left off, and multiple calls will share the same download progress.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PullModelRequest'
-      responses:
-        '200':
-          description: Successful operation.
-          content:
-            application/x-ndjson:
-              schema:
-                $ref: '#/components/schemas/PullModelResponse'
-  /push:
-    post:
-      operationId: pushModel
-      tags:
-        - Models
-      summary: Upload a model to a model library.
-      description: Requires registering for ollama.ai and adding a public key first.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PushModelRequest'
-      responses:
-        '200':
-          description: Successful operation.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PushModelResponse'
+  # /generate:
+  #   post:
+  #     operationId: generateCompletion
+  #     tags:
+  #       - Completions
+  #     summary: Generate a response for a given prompt with a provided model.
+  #     description: The final response object will include statistics and additional data from the request.
+  #     requestBody:
+  #       content:
+  #         application/json:
+  #           schema:
+  #             $ref: '#/components/schemas/GenerateCompletionRequest'
+  #     responses:
+  #       '200':
+  #         description: Successful operation.
+  #         content:
+  #           application/x-ndjson:
+  #             schema:
+  #               $ref: '#/components/schemas/GenerateCompletionResponse'
+  # /chat:
+  #   post:
+  #     operationId: generateChatCompletion
+  #     tags:
+  #       - Chat
+  #     summary: Generate the next message in a chat with a provided model.
+  #     description: This is a streaming endpoint, so there will be a series of responses. The final response object will include statistics and additional data from the request.
+  #     requestBody:
+  #       content:
+  #         application/json:
+  #           schema:
+  #             $ref: '#/components/schemas/GenerateChatCompletionRequest'
+  #     responses:
+  #       '200':
+  #         description: Successful operation.
+  #         content:
+  #           application/x-ndjson:
+  #             schema:
+  #               $ref: '#/components/schemas/GenerateChatCompletionResponse'
+  # /embeddings:
+  #   post:
+  #     operationId: generateEmbedding
+  #     tags:
+  #       - Embeddings
+  #     summary: Generate embeddings from a model.
+  #     requestBody:
+  #       content:
+  #         application/json:
+  #           schema:
+  #             $ref: '#/components/schemas/GenerateEmbeddingRequest'
+  #     responses:
+  #       '200':
+  #         description: Successful operation.
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: '#/components/schemas/GenerateEmbeddingResponse'
+  # /create:
+  #   post:
+  #     operationId: createModel
+  #     tags:
+  #       - Models
+  #     summary: Create a model from a Modelfile.
+  #     description: It is recommended to set `modelfile` to the content of the Modelfile rather than just set `path`. This is a requirement for remote create. Remote model creation should also create any file blobs, fields such as `FROM` and `ADAPTER`, explicitly with the server using Create a Blob and the value to the path indicated in the response.
+  #     requestBody:
+  #       description: Create a new model from a Modelfile.
+  #       content:
+  #         application/json:
+  #           schema:
+  #             $ref: '#/components/schemas/CreateModelRequest'
+  #     responses:
+  #       '200':
+  #         description: Successful operation.
+  #         content:
+  #           application/x-ndjson:
+  #             schema:
+  #               $ref: '#/components/schemas/CreateModelResponse'
+  # /tags:
+  #   get:
+  #     operationId: listModels
+  #     tags:
+  #       - Models
+  #     summary: List models that are available locally.
+  #     responses:
+  #       '200':
+  #         description: Successful operation.
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: '#/components/schemas/ModelsResponse'
+  # /show:
+  #   post:
+  #     operationId: showModelInfo
+  #     tags:
+  #       - Models
+  #     summary: Show details about a model including modelfile, template, parameters, license, and system prompt.
+  #     requestBody:
+  #       content:
+  #         application/json:
+  #           schema:
+  #             $ref: '#/components/schemas/ModelInfoRequest'
+  #     responses:
+  #       '200':
+  #         description: Successful operation.
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: '#/components/schemas/ModelInfo'
+  # /copy:
+  #   post:
+  #     operationId: copyModel
+  #     tags:
+  #       - Models
+  #     summary: Creates a model with another name from an existing model.
+  #     requestBody:
+  #       content:
+  #         application/json:
+  #           schema:
+  #             $ref: '#/components/schemas/CopyModelRequest'
+  #     responses:
+  #       '200':
+  #         description: Successful operation.
+  # /delete:
+  #   delete:
+  #     operationId: deleteModel
+  #     tags:
+  #       - Models
+  #     summary: Delete a model and its data.
+  #     requestBody:
+  #       content:
+  #         application/json:
+  #           schema:
+  #             $ref: '#/components/schemas/DeleteModelRequest'
+  #     responses:
+  #       '200':
+  #         description: Successful operation.
+  # /pull:
+  #   post:
+  #     operationId: pullModel
+  #     tags:
+  #       - Models
+  #     summary: Download a model from the ollama library.
+  #     description: Cancelled pulls are resumed from where they left off, and multiple calls will share the same download progress.
+  #     requestBody:
+  #       content:
+  #         application/json:
+  #           schema:
+  #             $ref: '#/components/schemas/PullModelRequest'
+  #     responses:
+  #       '200':
+  #         description: Successful operation.
+  #         content:
+  #           application/x-ndjson:
+  #             schema:
+  #               $ref: '#/components/schemas/PullModelResponse'
+  # /push:
+  #   post:
+  #     operationId: pushModel
+  #     tags:
+  #       - Models
+  #     summary: Upload a model to a model library.
+  #     description: Requires registering for ollama.ai and adding a public key first.
+  #     requestBody:
+  #       content:
+  #         application/json:
+  #           schema:
+  #             $ref: '#/components/schemas/PushModelRequest'
+  #     responses:
+  #       '200':
+  #         description: Successful operation.
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: '#/components/schemas/PushModelResponse'
   "/blobs/{digest}":
     head:
       operationId: checkBlob

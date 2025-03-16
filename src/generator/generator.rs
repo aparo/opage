@@ -4,9 +4,11 @@ use oas3::{spec::Operation, Spec};
 use tracing::{error, info};
 
 use crate::{
-    generator::path::{default_request, websocket_request},
-    generator::types::ObjectDatabase,
-    generator::types::PathDatabase,
+    generator::{
+        path::{default_request, websocket_request},
+        templates::rust::generate_rust_client_code,
+        types::{ObjectDatabase, PathDatabase},
+    },
     utils::config::Config,
     GeneratorError,
 };
@@ -15,6 +17,8 @@ use super::{
     component::{generate_components, write_object_database},
     templates::rust::populate_client_files,
 };
+
+use itertools::Itertools;
 
 pub struct Generator {
     config: Config,
@@ -186,14 +190,44 @@ impl Generator {
         Ok(operation_id.clone())
     }
 
-    pub fn generate_objects(&self) {
-        // 3.3 Write all registered objects to individual type definitions
+    pub fn generate_objects(&self) -> Result<(), GeneratorError> {
+        // Write all registered objects to individual type definitions
         write_object_database(&self.output_dir, &self.object_database, &self.config)
-            .expect("Write objects failed");
     }
 
-    pub fn populate_client_files(&self) {
+    pub fn generate_clients(&self) -> Result<(), GeneratorError> {
+        // Write all registered API calls in a client
+        let target_dir = self.output_dir.join("src");
+        let chunks = self
+            .path_database
+            .iter()
+            .chunk_by(|f| f.value().package.clone());
+
+        let mut grouped_paths: Vec<_> = chunks.into_iter().collect();
+
+        grouped_paths.sort_by(|a, b| a.0.cmp(&b.0));
+
+        for (namespace, group) in grouped_paths {
+            let items = group.map(|f| f.clone()).collect::<Vec<_>>();
+            let client_code = generate_rust_client_code(items, &self.config);
+            let mut path = namespace.replace(".", "/").replace("::", "/");
+            if path.is_empty() {
+                path = "lib".to_owned();
+            }
+
+            let full_path = target_dir.join(format!("{}.rs", path));
+            println!(
+                "Writing to {} \n{}",
+                full_path.to_str().unwrap(),
+                &client_code
+            );
+            // write_filename(&full_path, &client_code)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn populate_client_files(&self) -> Result<(), GeneratorError> {
         populate_client_files(&self.output_dir, &self.config)
-            .expect("Failed to populate client files");
     }
 }

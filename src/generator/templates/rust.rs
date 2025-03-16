@@ -1,7 +1,9 @@
+use crate::generator::types::{ModuleInfo, PropertyDefinition};
 use crate::utils::config::Config;
 use crate::utils::file::write_filename;
 use crate::GeneratorError;
 use askama::Template;
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 // list of primitive types of Rust language
@@ -91,4 +93,47 @@ pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<()
     }
 
     Ok(())
+}
+
+#[derive(Template)]
+#[template(path = "rust/client_function.j2", escape = "none")]
+pub struct RustClientFunctionTemplate<'a> {
+    pub name: &'a str,
+    pub description: &'a str,
+    pub required_properties: Vec<PropertyDefinition>,
+}
+
+pub fn generate_rust_client_code(
+    paths: Vec<crate::generator::types::PathDefinition>,
+    config: &Config,
+) -> String {
+    let mut imports = HashSet::new();
+
+    let mut client_code = String::new();
+    let mut function_code = String::new();
+
+    for path in paths.iter() {
+        let required_properties = path.get_required_properties();
+
+        let function = RustClientFunctionTemplate {
+            name: &path.name,
+            description: &path.description,
+            required_properties,
+        };
+        // let operation_id = operation.operation_id.clone();
+        // let operation_code = operation.generate_rust_code(config);
+        // client_code.push_str(&operation_code);
+        // client_code.push_str("\n");
+
+        // let module_info = ModuleInfo {
+        //     module_name: operation_id,
+        //     module_path: format!("{}.rs", operation_id),
+        // };
+        function_code.push_str(&function.render().unwrap());
+        for import in path.used_modules.iter() {
+            imports.insert(import.clone());
+        }
+    }
+    client_code.push_str(&function_code);
+    client_code
 }

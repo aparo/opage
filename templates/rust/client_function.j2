@@ -1,0 +1,8 @@
+{%- if description.len()>0 ~%}
+{{description}}
+{%~ endif -%}
+pub {{ name }}(&self{%- for prop in required_properties -%}, {{prop.name}}: {{prop.type_name}}{%- endfor -%}) -> builder::{{ name }} {
+  builder::{{ name }}::new(self)
+}
+
+

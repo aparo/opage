@@ -19,6 +19,7 @@ embed-file = "0.2.0"
 thiserror = "2.0.12"
 rayon = "1.10.0"
 dashmap = "6.1.0"
+itertools = "0.14.0"
 
 [workspace]
 members = ["oas3-rs/crates/oas3"]

@@ -70,6 +70,19 @@ fn main() {
         Ok(_) => info!("Generation paths completed"),
         Err(err) => error!("Generation failed: {}", err),
     }
-    generator.generate_objects();
-    generator.populate_client_files();
+
+    match generator.generate_clients() {
+        Ok(_) => info!("Generation clients completed"),
+        Err(err) => error!("Generation clients failed: {}", err),
+    }
+
+    match generator.generate_objects() {
+        Ok(_) => info!("Generation objects completed"),
+        Err(err) => error!("Generation objects failed: {}", err),
+    }
+
+    match generator.populate_client_files() {
+        Ok(_) => info!("Generation client files completed"),
+        Err(err) => error!("Generation client files failed: {}", err),
+    }
 }
