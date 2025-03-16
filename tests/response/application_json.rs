@@ -23,7 +23,7 @@ fn empty_json() {
     generate_operation(
         &spec,
         &name_mapping,
-        &Method::POST,
+        Method::POST,
         "/test",
         &path_spec.post.as_ref().unwrap(),
         &object_database,

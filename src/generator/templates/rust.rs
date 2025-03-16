@@ -136,7 +136,7 @@ pub fn generate_rust_client_code(
                     property
                         .description
                         .clone()
-                        .unwrap_or(String::from("No description available"))
+                        .unwrap_or(String::from("No description available")),
                 )
                 .as_str(),
             );
@@ -144,7 +144,7 @@ pub fn generate_rust_client_code(
 
         let function = RustClientFunctionTemplate {
             name: &path.name,
-            description,
+            description: fix_rust_description("", &description),
             required_properties,
             builder_name,
         };
@@ -164,4 +164,16 @@ pub fn generate_rust_client_code(
     }
     client_code.push_str(&function_code);
     client_code
+}
+
+pub fn fix_rust_description(ident: &str, description: &str) -> String {
+    if description.is_empty() {
+        return "".to_string();
+    }
+    description
+        .lines()
+        .map(|line| format!("{}/// {}\n", ident, line))
+        .collect::<String>()
+        .trim()
+        .to_string()
 }

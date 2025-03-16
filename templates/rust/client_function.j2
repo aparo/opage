@@ -2,7 +2,7 @@
 {{description}}
 {%~ endif -%}
 pub {{ name }}(&self{%- for prop in required_properties -%}, {{prop.name}}: {{prop.type_name}}{%- endfor -%}) -> builder::{{ builder_name }} {
-  builder::{{ builder_name }}::client(self).{%- for prop in required_properties -%}{{prop.name}}(prop.name){%- endfor -%})
+  builder::{{ builder_name }}::client(self).{%- for prop in required_properties -%}{{prop.name}}({{prop.name}}){%- endfor -%})
 }
 
 

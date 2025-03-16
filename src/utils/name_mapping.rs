@@ -308,18 +308,6 @@ fn fix_private_name(name: &str) -> String {
     }
 }
 
-pub fn fix_rust_description(ident: &str, description: &str) -> String {
-    if description.is_empty() {
-        return "".to_string();
-    }
-    description
-        .lines()
-        .map(|line| format!("{}/// {}\n", ident, line))
-        .collect::<String>()
-        .trim()
-        .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

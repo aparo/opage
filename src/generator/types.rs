@@ -1,11 +1,10 @@
 use crate::generator::templates::rust::{Field, RustEnumTemplate, RustStructTemplate};
-use crate::utils::{
-    config::Config,
-    name_mapping::{extract_rust_name, fix_rust_description},
-};
+use crate::utils::{config::Config, name_mapping::extract_rust_name};
 use askama::Template;
 use dashmap::DashMap;
 use std::collections::HashMap;
+
+use super::templates::rust::fix_rust_description;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ModuleInfo {

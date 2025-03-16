@@ -9,7 +9,7 @@ use crate::{
     utils::file::write_filename,
     utils::{
         config::Config,
-        name_mapping::{extract_rust_name, extract_rust_namespace, fix_rust_description},
+        name_mapping::{extract_rust_name, extract_rust_namespace},
     },
     GeneratorError,
 };
@@ -19,7 +19,7 @@ use object_definition::{
 };
 use tracing::{error, info, trace};
 
-use super::templates::rust::RustTypeTemplate;
+use super::templates::rust::{fix_rust_description, RustTypeTemplate};
 use askama::Template;
 
 pub mod object_definition;

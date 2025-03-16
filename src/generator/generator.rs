@@ -96,7 +96,7 @@ impl Generator {
             }
 
             for operation in operations {
-                match self.generate_path_code(spec, &operation.0, &name, operation.1) {
+                match self.generate_path_code(spec, operation.0, &name, operation.1) {
                     Ok(_) => (),
                     Err(err) => {
                         error!("{}", err);
@@ -112,7 +112,7 @@ impl Generator {
     fn generate_path_code(
         &self,
         spec: &Spec,
-        method: &Method,
+        method: Method,
         path: &str,
         operation: &Operation,
     ) -> Result<String, GeneratorError> {

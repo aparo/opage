@@ -27,7 +27,7 @@ use super::utils::{generate_request_body, generate_responses, is_path_parameter}
 pub fn generate_operation(
     spec: &Spec,
     name_mapping: &NameMapping,
-    method: &Method,
+    method: Method,
     path: &str,
     operation: &Operation,
     object_database: &ObjectDatabase,
@@ -707,29 +707,8 @@ fn generate_path_parameters(
                     if parameter.name != path_component {
                         return false;
                     }
-                    if let Some(ref schema) = parameter.schema {
-                        match schema.resolve(spec) {
-                            Ok(schema) => {
-                                description = schema.description.clone();
-                                example = schema.example.clone();
-                                if let Some(ref schema_type) = schema.schema_type {
-                                    type_name = match schema_type {
-                                        SchemaTypeSet::Single(single_type) => {
-                                            oas3_type_to_string(single_type)
-                                        }
-                                        SchemaTypeSet::Multiple(multiple_types) => multiple_types
-                                            .iter()
-                                            .map(oas3_type_to_string)
-                                            .collect::<Vec<String>>()
-                                            .join(""),
-                                    };
-                                }
-                            }
-                            Err(err) => {
-                                return false;
-                            }
-                        }
-                    }
+                    description = parameter.description.clone();
+                    example = parameter.example.clone();
                     true
                 }
             });
@@ -966,7 +945,7 @@ fn generate_multi_request_type_functions(
     module_imports: &mut Vec<ModuleInfo>,
     query_parameter_code: &QueryParameters,
     response_enum_name: &str,
-    method: &Method,
+    method: Method,
     request_entity: &RequestEntity,
 ) -> Option<String> {
     if request_entity.content.len() < 2 {
