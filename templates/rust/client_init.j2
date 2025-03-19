@@ -1,0 +1,270 @@
+pub mod auth_middleware;
+pub mod builders;
+mod client;
+mod credentials;
+pub mod models;
+
+use std::sync::{Arc, Mutex};
+
+pub use client::{ByteStream, Error, ResponseValue};
+#[allow(unused_imports)]
+use client::{RequestBuilderExt, encode_path, encode_path_option_vec_string};
+#[allow(unused_imports)]
+use reqwest::header::{HeaderMap, HeaderValue};
+use serde::{Serialize, de::DeserializeOwned};
+use tracing::info;
+
+use std::collections::HashMap;
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::{Path, PathBuf};
+
+use client::ReqwestResponse;
+#[cfg(not(target_arch = "wasm32"))]
+use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
+#[cfg(target_arch = "wasm32")]
+use reqwest::Client;
+#[cfg(not(target_arch = "wasm32"))]
+use reqwest::ClientBuilder;
+#[cfg(not(target_arch = "wasm32"))]
+use reqwest::{NoProxy, Proxy};
+use reqwest_middleware::ClientWithMiddleware;
+use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
+use url::Url;
+
+#[cfg(not(target_arch = "wasm32"))]
+use crate::{auth_middleware::AuthMiddleware, credentials::Credentials};
+
+#[derive(Clone, Debug)]
+pub struct {{client_name}}Builder {
+    baseurl: Url,
+    retries: u32,
+    credentials: HashMap<String, Credentials>,
+    accept_invalid_certificates: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    cache: Option<PathBuf>,
+    #[cfg(not(target_arch = "wasm32"))]
+    proxy: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    proxy_url: Option<Proxy>,
+    #[cfg(not(target_arch = "wasm32"))]
+    no_proxy_domain: Option<String>,
+}
+
+impl Default for {{client_name}}Builder {
+    fn default() -> Self {
+        Self {
+            baseurl: Url::parse("{{server_url}}").unwrap(),
+            credentials: HashMap::new(),
+            accept_invalid_certificates: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            cache: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            proxy: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            proxy_url: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            no_proxy_domain: None,
+            #[cfg(not(test))]
+            retries: 2,
+            #[cfg(test)]
+            retries: 0,
+        }
+    }
+}
+
+impl {{client_name}}Builder {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn base_url(mut self, baseurl: Url) -> Self {
+        self.baseurl = baseurl;
+        self
+    }
+
+    pub fn accept_invalid_certificates(mut self, accept_invalid_certificates: bool) -> Self {
+        self.accept_invalid_certificates = accept_invalid_certificates;
+        self
+    }
+
+    pub fn basic_auth(mut self, username: impl Into<String>, password: impl Into<String>) -> Self {
+        self.credentials.insert(
+            auth_middleware::nerf_dart(&self.baseurl),
+            Credentials::Basic {
+                username: username.into(),
+                password: Some(password.into()),
+            },
+        );
+        self
+    }
+
+    pub fn token_auth(mut self, token: impl Into<String>) -> Self {
+        self.credentials.insert(
+            auth_middleware::nerf_dart(&self.baseurl),
+            Credentials::Token(token.into()),
+        );
+        self
+    }
+
+    pub fn legacy_auth(mut self, legacy_auth_token: impl Into<String>) -> Self {
+        self.credentials.insert(
+            auth_middleware::nerf_dart(&self.baseurl),
+            Credentials::EncodedBasic(legacy_auth_token.into()),
+        );
+        self
+    }
+
+    pub fn retries(mut self, retries: u32) -> Self {
+        self.retries = retries;
+        self
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn cache(mut self, cache: impl AsRef<Path>) -> Self {
+        self.cache = Some(PathBuf::from(cache.as_ref()));
+        self
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn proxy(mut self, proxy: bool) -> Self {
+        self.proxy = proxy;
+        self
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn proxy_url(mut self, proxy_url: impl AsRef<str>) -> Result<Self, Error> {
+        match Url::parse(proxy_url.as_ref()) {
+            Ok(url_info) => {
+                let username = url_info.username();
+                let password = url_info.password();
+                let mut proxy = Proxy::all(url_info.as_ref())?;
+
+                if let Some(password_str) = password {
+                    proxy = proxy.basic_auth(username, password_str);
+                }
+
+                proxy = proxy.no_proxy(self.get_no_proxy_domain());
+                self.proxy_url = Some(proxy);
+                self.proxy = true;
+                Ok(self)
+            }
+            Err(e) => Err(Error::UrlParseError(e)),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn no_proxy_domain(mut self, no_proxy_domain: impl AsRef<str>) -> Self {
+        self.no_proxy_domain = Some(no_proxy_domain.as_ref().into());
+        self
+    }
+
+    pub fn build(self) -> {{client_name}} {
+        #[cfg(target_arch = "wasm32")]
+        let client_raw = {
+            let mut client_core = ClientBuilder::new();
+            if self.accept_invalid_certificates {
+                let mut builder = client_raw.clone().builder();
+                builder = builder.danger_accept_invalid_certs(true);
+                builder = builder.danger_accept_invalid_hostnames(true);
+                client_raw = builder.build().unwrap();
+            }
+            client_core.build().expect("Fail to build HTTP client.")
+        };
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let client_raw = {
+            let mut client_core = ClientBuilder::new()
+                .user_agent("{{user_agent}}")
+                .pool_max_idle_per_host(20)
+                .timeout(std::time::Duration::from_secs(60 * 5));
+
+            if let Some(url) = self.proxy_url {
+                client_core = client_core.proxy(url);
+            }
+
+            if !self.proxy {
+                client_core = client_core.no_proxy();
+            }
+            if self.accept_invalid_certificates {
+                client_core = client_core.danger_accept_invalid_certs(true);
+                client_core = client_core.danger_accept_invalid_hostnames(true);
+            }
+
+            client_core.build().expect("Fail to build HTTP client.")
+        };
+
+        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(self.retries);
+        let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
+        let credentials = Arc::new(self.credentials);
+
+        #[allow(unused_mut)]
+        let mut client_builder = reqwest_middleware::ClientBuilder::new(client_raw.clone())
+            .with(retry_strategy)
+            .with(AuthMiddleware(credentials.clone()));
+
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(cache_loc) = self.cache {
+            client_builder = client_builder.with(Cache(HttpCache {
+                mode: CacheMode::Default,
+                manager: CACacheManager { path: cache_loc },
+                options: HttpCacheOptions::default(),
+            }));
+        }
+
+        let retry_policy = ExponentialBackoff::builder()
+            .retry_bounds(
+                std::time::Duration::from_millis(30),
+                std::time::Duration::from_millis(100),
+            )
+            .build_with_max_retries(self.retries);
+        let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
+
+        {{client_name}} {
+            baseurl: Arc::new(self.baseurl),
+            client: client_builder.build()
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn get_no_proxy_domain(&self) -> Option<NoProxy> {
+        if let Some(ref no_proxy_conf) = self.no_proxy_domain {
+            if !no_proxy_conf.is_empty() {
+                return NoProxy::from_string(no_proxy_conf);
+            }
+        }
+
+        NoProxy::from_env().or(None)
+    }
+}
+
+///Client for OpenSearch
+///
+///Version: 2021-11-23
+#[derive(Clone, Debug)]
+pub struct {{client_name}} {
+    pub(crate) baseurl: Arc<Url>,
+    pub(crate) client: ClientWithMiddleware,
+    pub(crate) bulker: Arc<Mutex<String>>,
+    pub(crate) bulker_size: Arc<Mutex<u32>>,
+    pub(crate) max_bulk_size: u32,
+}
+
+pub trait Request {
+    type Response: DeserializeOwned + Send + Sync;
+    fn method(&self) -> reqwest::Method;
+    fn path(&self) -> Result<String, Error>;
+    fn body(&self) -> Result<Option<String>, Error>;
+    fn query_args(&self) -> Result<Option<HashMap<String, String>>, Error>;
+    fn url(&self, base_url: &Url) -> Result<Url, Error> {
+        let mut url = base_url.clone();
+        url.set_path(&self.path()?);
+        if let Some(query_args) = self.query_args()? {
+            url.query_pairs_mut()
+                .clear()
+                .extend_pairs(query_args.iter());
+        }
+        Ok(url)
+    }
+}
+
+impl {{client_name}} {

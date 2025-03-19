@@ -1,0 +1,48 @@
+{%- if description.len()>0 ~%}
+{{description}}
+{%- endif %}
+{%- if derivations.len()>0 ~%}
+#[derive({% for i in derivations %}{{ i }}, {% endfor %})]
+{%~ endif -%}
+#[builder(setter(into))]
+pub struct {{ name }} {
+{%- for field in fields %}
+{% if field.description.len()>0 +%}
+    {{field.description}}{% endif %}
+{%- if field.annotations.len()>0 %}
+    {% for i in field.annotations %}{{ i }}{% endfor -%}
+{%- endif %}
+    {{ field.modifier }} {{ field.name }}: {{ field.typ }},{%- endfor %}
+}
+
+impl {{ name }} {
+    pub fn build_request(&self) -> Result<Request, crate::client::Error> {
+        let mut request = Request::new();
+        request.set_method(Method::{{ method }});
+        request.set_path("{{ path }}"{% for field in path_fields%}.replace("{{ field.name }}", &self.{{ field.name }}.to_string()){% endfor %});
+        {% if query_fields.len() > 0 %}
+        let mut query_args=HashMap<String, String> = HashMap::new();
+        {% for field in query_fields %}
+        query_args.push("{{ field.name }}", &self.{{ field.name }}.to_string());{% endfor %}
+        request.set_query_params(query_args);{% endif %}
+        {% if let Some(body_type) = body_request -%}
+        request.set_body({{body_type.name}}{
+            {% for field in body_fields -%}
+            {{ field.name }}: self.{{ field.name }},
+            {% endfor %}
+        });{% endif %}
+        Ok(request)
+    }
+}
+
+
+impl {{ builder_name }} {
+    async fn send(&self) -> Result<ResponseValue<{{response_type}}>, crate::client::Error> {
+        let value=self.build()?;
+        let request=value.build_request()?;
+        let result=value
+            .client
+            .execute::<{{response_type}}>(request).await;
+        result
+    }
+}

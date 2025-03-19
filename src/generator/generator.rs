@@ -9,7 +9,7 @@ use crate::{
         templates::rust::generate_rust_client_code,
         types::{Method, ObjectDatabase, PathDatabase},
     },
-    utils::config::Config,
+    utils::{config::Config, file::write_filename},
     GeneratorError,
 };
 
@@ -212,7 +212,8 @@ impl Generator {
 
         for (namespace, group) in grouped_paths {
             let items = group.map(|f| f.clone()).collect::<Vec<_>>();
-            let client_code = generate_rust_client_code(items, &self.config);
+            let (client_code, builders) =
+                generate_rust_client_code(items, &self.config, &self.object_database);
             let mut path = namespace.replace(".", "/").replace("::", "/");
             if path.is_empty() {
                 path = "lib".to_owned();
@@ -224,7 +225,43 @@ impl Generator {
                 full_path.to_str().unwrap(),
                 &client_code
             );
-            // write_filename(&full_path, &client_code)?;
+            write_filename(&full_path, &client_code)?;
+
+            // we create builder files
+            let mut imports = vec![];
+            let mut builder_code = String::new();
+            for builder in builders {
+                for import in builder.imports {
+                    let use_def = import.to_use();
+                    if imports.contains(&use_def) {
+                        continue;
+                    }
+                    imports.push(import.to_use());
+                }
+                builder_code.push_str(&builder.code);
+                builder_code.push_str("\n");
+            }
+            let mut full_builder = String::new();
+            full_builder.push_str("use crate::Client;\n");
+            full_builder.push_str("use crate::client::ResponseValue;\n");
+            full_builder.push_str("use crate::client::Request;\n");
+            full_builder.push_str("use reqwest::Method;\n");
+            full_builder.push_str("use derive_builder::Builder;\n");
+            imports.sort();
+            for import in imports {
+                full_builder.push_str(&import);
+                full_builder.push_str("\n");
+            }
+            full_builder.push_str("\n");
+            full_builder.push_str(&builder_code);
+
+            let builder_path = target_dir.join("builders.rs");
+            println!(
+                "Writing to {} \n{}",
+                builder_path.to_str().unwrap(),
+                &full_builder
+            );
+            write_filename(&builder_path, &full_builder)?;
         }
 
         Ok(())

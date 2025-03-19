@@ -1,4 +1,6 @@
-use super::utils::{generate_request_body, generate_responses, is_path_parameter};
+use super::utils::{
+    generate_request_body, generate_request_body_entity, generate_responses, is_path_parameter,
+};
 use crate::{
     generator::component::{
         object_definition::oas3_type_to_string, type_definition::get_type_from_schema,
@@ -338,7 +340,7 @@ pub fn generate_operation(
     // Request Body
     let request_body = match operation.request_body {
         Some(ref request_body) => {
-            match generate_request_body(
+            match generate_request_body_entity(
                 spec,
                 object_database,
                 &operation_definition_path,

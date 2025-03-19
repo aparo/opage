@@ -10,12 +10,14 @@ use tracing::{error, trace};
 use crate::{
     generator::{
         component::{
-            object_definition::{get_object_or_ref_struct_name, is_object_empty},
+            object_definition::{
+                get_object_or_ref_struct_name, get_or_create_object, is_object_empty,
+            },
             type_definition::get_type_from_schema,
         },
         types::{
-            ContentTypeValue, ModuleInfo, ObjectDatabase, RequestEntity, ResponseEntities,
-            ResponseEntity, TransferMediaType, TypeDefinition,
+            ContentTypeValue, ModuleInfo, ObjectDatabase, ObjectDefinition, RequestEntity,
+            ResponseEntities, ResponseEntity, StructDefinition, TransferMediaType, TypeDefinition,
         },
     },
     utils::{config::Config, name_mapping::NameMapping},
@@ -204,6 +206,62 @@ fn generated_content_types_from_content_map(
 }
 
 pub fn generate_request_body(
+    spec: &Spec,
+    object_database: &ObjectDatabase,
+    definition_path: &Vec<String>,
+    name_mapping: &NameMapping,
+    request_body: &ObjectOrReference<RequestBody>,
+    function_name: &str,
+    config: &Config,
+) -> Result<ObjectDefinition, GeneratorError> {
+    let request = match request_body.resolve(spec) {
+        Ok(request) => request,
+        Err(err) => {
+            return Err(GeneratorError::ResolveError(format!(
+                "Failed to resolve request body {}",
+                err.to_string()
+            )))
+        }
+    };
+    for (_, media_type) in &request.content {
+        // we skipping content type for now
+        match media_type.schema {
+            Some(ref schema) => match schema.resolve(spec) {
+                Ok(schema) => {
+                    return get_or_create_object(
+                        spec,
+                        object_database,
+                        definition_path.clone(),
+                        function_name,
+                        &schema,
+                        name_mapping,
+                        config,
+                    )
+                }
+                Err(err) => {
+                    error!("Failed to resolve request body schema: {}", err);
+                    return Err(GeneratorError::ResolveError(format!(
+                        "Failed to resolve request body {}",
+                        err.to_string()
+                    )));
+                }
+            },
+            None => {
+                error!("Failed to parse request body content type");
+                return Err(GeneratorError::ResolveError(format!(
+                    "Missing schema for {}",
+                    function_name.to_string()
+                )));
+            }
+        }
+    }
+    Err(GeneratorError::ResolveError(format!(
+        "Failed to resolve request body {}",
+        function_name.to_string()
+    )))
+}
+
+pub fn generate_request_body_entity(
     spec: &Spec,
     object_database: &ObjectDatabase,
     definition_path: &Vec<String>,

@@ -529,7 +529,7 @@ fn get_or_create_property(
         }
     };
 
-    let (property_type_definition_path, property_type_name, description, example) =
+    let (property_type_definition_path, property_type_name, description, _example) =
         get_object_or_ref_struct_name(spec, &definition_path, name_mapping, property_ref)?;
 
     match get_type_from_schema(

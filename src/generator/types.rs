@@ -356,13 +356,13 @@ pub struct PathDefinition {
     pub url: String,
     pub response_name: String,
     pub used_modules: Vec<ModuleInfo>,
-    pub properties: HashMap<String, PropertyDefinition>,
+    pub request_body: Option<ObjectDefinition>,
+    pub request_entity: Option<RequestEntity>,
     pub local_objects: HashMap<String, Box<ObjectDefinition>>,
     pub description: String,
     pub response_entities: ResponseEntities,
     pub path_parameters: PathParameters,
     pub query_parameters: QueryParameters,
-    pub request_body: Option<RequestEntity>,
 }
 
 impl Default for PathDefinition {
@@ -374,18 +374,59 @@ impl Default for PathDefinition {
             url: "/".to_string(),
             response_name: "".to_string(),
             used_modules: vec![],
-            properties: HashMap::new(),
+            request_body: None,
+            request_entity: None,
             local_objects: HashMap::new(),
             description: "".to_string(),
             response_entities: HashMap::new(),
             path_parameters: PathParameters::default(),
             query_parameters: QueryParameters::default(),
-            request_body: None,
         }
     }
 }
 
 impl PathDefinition {
+    pub fn get_request_type(&self) -> Option<TypeDefinition> {
+        if let Some(object_definition) = &self.request_body {
+            match object_definition {
+                ObjectDefinition::Struct(struct_definition) => {
+                    let object_name = struct_definition.id();
+                    let object_path = struct_definition.package.clone();
+                    return Some(TypeDefinition {
+                        name: object_name.clone(),
+                        module: Some(ModuleInfo::new(&object_path, &object_name)),
+                        description: struct_definition.description.clone(),
+                        example: struct_definition
+                            .properties
+                            .values()
+                            .next()
+                            .unwrap()
+                            .example
+                            .clone(),
+                    });
+                }
+                // TODO manage enums
+                _ => return None,
+            }
+        }
+        None
+    }
+    pub fn extract_body_properties(&self) -> Vec<(String, PropertyDefinition)> {
+        let mut properties = vec![];
+        if let Some(object_definition) = &self.request_body {
+            match object_definition {
+                ObjectDefinition::Struct(struct_definition) => {
+                    for (name, property) in &struct_definition.properties {
+                        properties.push((name.clone(), property.clone()));
+                    }
+                }
+                // TODO manage enums
+                _ => (),
+            }
+        }
+        properties
+    }
+
     pub fn get_required_properties(&self) -> Vec<PropertyDefinition> {
         let mut required_properties = vec![];
         for (_, property) in &self.path_parameters.parameters_struct.properties {
@@ -398,12 +439,34 @@ impl PathDefinition {
                 required_properties.push(property.clone());
             }
         }
-        for (_, property) in &self.properties {
+
+        for (_, property) in self.extract_body_properties() {
             if property.required {
                 required_properties.push(property.clone());
             }
         }
         required_properties
+    }
+
+    pub fn get_optional_properties(&self) -> Vec<PropertyDefinition> {
+        let mut optional_properties = vec![];
+        for (_, property) in &self.path_parameters.parameters_struct.properties {
+            if !property.required {
+                optional_properties.push(property.clone());
+            }
+        }
+        for (_, property) in &self.query_parameters.query_struct.properties {
+            if !property.required {
+                optional_properties.push(property.clone());
+            }
+        }
+        for (_, property) in self.extract_body_properties() {
+            if !property.required {
+                optional_properties.push(property.clone());
+            }
+        }
+
+        optional_properties
     }
 
     pub fn extract_response_modules(&self) -> Vec<ModuleInfo> {
@@ -430,5 +493,25 @@ impl PathDefinition {
             }
         }
         module_imports
+    }
+
+    pub fn extract_response_type(&self) -> Option<TypeDefinition> {
+        let mut response_type = None;
+        for (_, entity) in &self.response_entities {
+            for (_, content) in &entity.content {
+                match content {
+                    TransferMediaType::ApplicationJson(ref type_definition) => {
+                        match type_definition {
+                            Some(type_definition) => {
+                                response_type = Some(type_definition.clone());
+                            }
+                            None => (),
+                        }
+                    }
+                    TransferMediaType::TextPlain => (),
+                }
+            }
+        }
+        response_type
     }
 }
