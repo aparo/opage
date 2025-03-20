@@ -63,6 +63,7 @@ fn main() {
     };
 
     config.set_language(cli.language);
+    config.validate();
 
     let generator = Generator::new(config, output_dir, spec_file_paths);
 

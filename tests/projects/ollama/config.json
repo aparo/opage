@@ -1,9 +1,9 @@
 {
   "project_metadata": {
     "name": "ollama-client",
-    "version": "0.0.0"
+    "version": "0.0.0",
+    "client_name": "OllamaClient"
   },
-  "client_name": "OllamaClient",
   "name_mapping": {
     "struct_mapping": {},
     "property_mapping": {},

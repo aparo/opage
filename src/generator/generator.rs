@@ -1,24 +1,19 @@
 use std::path::PathBuf;
 
+use crate::Language;
 use oas3::{spec::Operation, Spec};
 use tracing::{error, info};
 
 use crate::{
     generator::{
         path::{default_request, websocket_request},
-        templates::rust::generate_rust_client_code,
         types::{Method, ObjectDatabase, PathDatabase},
     },
-    utils::{config::Config, file::write_filename},
+    utils::config::Config,
     GeneratorError,
 };
 
-use super::{
-    component::{generate_components, write_object_database},
-    templates::rust::populate_client_files,
-};
-
-use itertools::Itertools;
+use super::{component::generate_components, templates::rust};
 
 pub struct Generator {
     config: Config,
@@ -195,79 +190,36 @@ impl Generator {
 
     pub fn generate_objects(&self) -> Result<(), GeneratorError> {
         // Write all registered objects to individual type definitions
-        write_object_database(&self.output_dir, &self.object_database, &self.config)
+        match self.config.language {
+            Language::Rust => {
+                rust::write_object_database(&self.output_dir, &self.object_database, &self.config)
+            }
+            _ => Err(GeneratorError::UnsupportedLanguageError(
+                self.config.language.to_string(),
+            )),
+        }
     }
 
     pub fn generate_clients(&self) -> Result<(), GeneratorError> {
-        // Write all registered API calls in a client
-        let target_dir = self.output_dir.join("src");
-        let chunks = self
-            .path_database
-            .iter()
-            .chunk_by(|f| f.value().package.clone());
-
-        let mut grouped_paths: Vec<_> = chunks.into_iter().collect();
-
-        grouped_paths.sort_by(|a, b| a.0.cmp(&b.0));
-
-        for (namespace, group) in grouped_paths {
-            let items = group.map(|f| f.clone()).collect::<Vec<_>>();
-            let (client_code, builders) =
-                generate_rust_client_code(items, &self.config, &self.object_database);
-            let mut path = namespace.replace(".", "/").replace("::", "/");
-            if path.is_empty() {
-                path = "lib".to_owned();
-            }
-
-            let full_path = target_dir.join(format!("{}.rs", path));
-            println!(
-                "Writing to {} \n{}",
-                full_path.to_str().unwrap(),
-                &client_code
-            );
-            write_filename(&full_path, &client_code)?;
-
-            // we create builder files
-            let mut imports = vec![];
-            let mut builder_code = String::new();
-            for builder in builders {
-                for import in builder.imports {
-                    let use_def = import.to_use();
-                    if imports.contains(&use_def) {
-                        continue;
-                    }
-                    imports.push(import.to_use());
-                }
-                builder_code.push_str(&builder.code);
-                builder_code.push_str("\n");
-            }
-            let mut full_builder = String::new();
-            full_builder.push_str("use crate::Client;\n");
-            full_builder.push_str("use crate::client::ResponseValue;\n");
-            full_builder.push_str("use crate::client::Request;\n");
-            full_builder.push_str("use reqwest::Method;\n");
-            full_builder.push_str("use derive_builder::Builder;\n");
-            imports.sort();
-            for import in imports {
-                full_builder.push_str(&import);
-                full_builder.push_str("\n");
-            }
-            full_builder.push_str("\n");
-            full_builder.push_str(&builder_code);
-
-            let builder_path = target_dir.join("builders.rs");
-            println!(
-                "Writing to {} \n{}",
-                builder_path.to_str().unwrap(),
-                &full_builder
-            );
-            write_filename(&builder_path, &full_builder)?;
+        match self.config.language {
+            Language::Rust => rust::generate_clients(
+                &self.output_dir,
+                &self.path_database,
+                &self.config,
+                &self.object_database,
+            ),
+            _ => Err(GeneratorError::UnsupportedLanguageError(
+                self.config.language.to_string(),
+            )),
         }
-
-        Ok(())
     }
 
     pub fn populate_client_files(&self) -> Result<(), GeneratorError> {
-        populate_client_files(&self.output_dir, &self.config)
+        match self.config.language {
+            Language::Rust => rust::populate_client_files(&self.output_dir, &self.config),
+            _ => Err(GeneratorError::UnsupportedLanguageError(
+                self.config.language.to_string(),
+            )),
+        }
     }
 }

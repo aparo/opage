@@ -1,10 +1,11 @@
 use crate::generator::templates::rust::{Field, RustEnumTemplate, RustStructTemplate};
-use crate::utils::{config::Config, name_mapping::extract_rust_name};
+use crate::utils::config::Config;
+use crate::GeneratorError;
 use askama::Template;
 use dashmap::DashMap;
 use std::collections::HashMap;
 
-use super::templates::rust::fix_rust_description;
+use super::templates::rust;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ModuleInfo {
@@ -105,42 +106,15 @@ impl EnumDefinition {
         required_modules
     }
 
-    pub fn to_string(&self, serializable: bool) -> String {
-        // let mut definition_str = String::new();
-        let description =
-            fix_rust_description("", &self.description.as_ref().map_or("", |d| d.as_str()));
-        let variants = self
-            .values
-            .iter()
-            .map(|(_, enum_value)| {
-                format!(
-                    "{}({})",
-                    extract_rust_name(&enum_value.name),
-                    extract_rust_name(&enum_value.value_type.name)
-                )
-            })
-            .collect();
-
-        let mut derivations = vec!["Debug", "Clone", "PartialEq"];
-        if serializable {
-            derivations.push("Serialize");
-            derivations.push("Deserialize");
+    pub fn to_string(&self, serializable: bool, config: &Config) -> Result<String, GeneratorError> {
+        match config.language {
+            crate::Language::Rust => Ok(rust::render_enum_definition(&self, serializable)),
+            _ => Err(GeneratorError::UnsupportedLanguageError(format!(
+                "Error rendering StructDefinition {} {}",
+                self.name,
+                config.language.to_string()
+            ))),
         }
-
-        let template = RustEnumTemplate {
-            name: extract_rust_name(&self.name).as_str(),
-            description: description.as_str(),
-            derivations,
-            variants: variants,
-            imports: self
-                .get_required_modules()
-                .iter()
-                .map(|module| module.to_use())
-                .collect(),
-        }
-        .render()
-        .unwrap();
-        template
     }
 }
 
@@ -177,95 +151,17 @@ impl StructDefinition {
         required_modules
     }
 
-    pub fn to_string(&self, serializable: bool, config: &Config) -> String {
-        let description =
-            fix_rust_description("", &self.description.as_ref().map_or("", |d| d.as_str()));
-        let mut derivations = vec!["Debug", "Clone", "PartialEq"];
-        if serializable {
-            derivations.push("Serialize");
-            derivations.push("Deserialize");
-        }
-        let has_default = self.all_properties_default();
-        if has_default {
-            derivations.push("Default");
-        }
-        let mut fields: Vec<Field> = vec![];
-        for (_, property) in &self.properties {
-            let mut annotations = vec![];
-            let mut serde_parts = vec![];
-            if serializable
-                && (property.name != property.real_name || is_private_name(&property.real_name))
-            {
-                serde_parts.push(format!("alias = \"{}\"", property.real_name));
+    pub fn to_string(&self, serializable: bool, config: &Config) -> Result<String, GeneratorError> {
+        match config.language {
+            crate::Language::Rust => {
+                Ok(rust::render_struct_definition(&self, serializable, config))
             }
-            let field_description = fix_rust_description(
-                "  ",
-                &property.description.as_ref().map_or("", |d| d.as_str()),
-            );
-
-            if property.type_name.starts_with("Vec<") {
-                serde_parts.push("default".to_string());
-                serde_parts.push("skip_serializing_if = \"Vec::is_empty\"".to_string());
-            } else if property.type_name.starts_with("Map<") {
-                serde_parts.push("default".to_string());
-                serde_parts.push("skip_serializing_if = \"Map::is_empty\"".to_string());
-            } else if !property.required && serializable {
-                if config.serde_skip_null {
-                    serde_parts.push("default".to_string());
-                    serde_parts.push("skip_serializing_if = \"Option::is_none\"".to_string());
-                } else {
-                    serde_parts.push("default".to_string());
-                }
-            }
-            if has_default {
-                if serde_parts.contains(&"default".to_string()) {
-                    serde_parts.push("default".to_string());
-                }
-            }
-
-            if property.required
-                || property.type_name.starts_with("Vec<")
-                || property.type_name.starts_with("Map<")
-            {
-                if !serde_parts.is_empty() {
-                    annotations.push(format!("#[serde({})]", serde_parts.join(", ")));
-                }
-                fields.push(Field {
-                    annotations,
-                    description: field_description,
-                    modifier: "pub".to_string(),
-                    name: extract_rust_name(&property.name),
-                    typ: property.type_name.clone(),
-                });
-            } else {
-                if serializable {
-                    annotations.push(format!("#[serde({})]", serde_parts.join(", ")));
-                }
-                let name = extract_rust_name(&property.name);
-                fields.push(Field {
-                    annotations,
-                    description: field_description,
-                    modifier: "pub".to_string(),
-                    name,
-                    typ: format!("Option<{}>", extract_rust_name(&property.type_name)),
-                });
-            }
+            _ => Err(GeneratorError::UnsupportedLanguageError(format!(
+                "Error rendering StructDefinition {} {}",
+                self.name,
+                config.language.to_string()
+            ))),
         }
-        fields.sort();
-        let template = RustStructTemplate {
-            name: extract_rust_name(&self.name).as_str(),
-            description: description.as_str(),
-            derivations,
-            fields,
-            imports: self
-                .get_required_modules()
-                .iter()
-                .map(|module| module.to_use())
-                .collect(),
-        }
-        .render()
-        .unwrap();
-        template
     }
 }
 
@@ -274,10 +170,6 @@ pub struct PrimitiveDefinition {
     pub name: String,
     pub primitive_type: TypeDefinition,
     pub description: Option<String>,
-}
-
-fn is_private_name(name: &str) -> bool {
-    name.eq_ignore_ascii_case("type") || name.starts_with("r#")
 }
 
 #[derive(Clone, Debug)]

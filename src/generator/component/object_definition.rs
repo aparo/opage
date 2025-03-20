@@ -33,19 +33,6 @@ pub fn get_object_name(object_definition: &ObjectDefinition) -> String {
     }
 }
 
-pub fn modules_to_string(modules: &Vec<&ModuleInfo>) -> String {
-    let mut module_import_string = String::new();
-    let mut unique_modules: Vec<&ModuleInfo> = vec![];
-    for module in modules {
-        if unique_modules.contains(&module) {
-            continue;
-        }
-        unique_modules.push(&module);
-        module_import_string += format!("use {}::{};\n", module.path, module.name).as_str();
-    }
-    module_import_string
-}
-
 pub fn is_object_empty(object_schema: &ObjectSchema) -> bool {
     return object_schema.schema_type.is_none()
         && object_schema.const_value.is_none()

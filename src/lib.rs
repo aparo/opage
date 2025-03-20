@@ -12,3 +12,12 @@ pub enum Language {
     Rust,
     Scala,
 }
+
+impl ToString for Language {
+    fn to_string(&self) -> String {
+        match self {
+            Language::Rust => "rust".to_string(),
+            Language::Scala => "scala".to_string(),
+        }
+    }
+}

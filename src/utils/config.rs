@@ -1,3 +1,4 @@
+use convert_case::Casing;
 use serde::Deserialize;
 use serde_aux::prelude::*;
 use std::{fs::File, path::Path};
@@ -6,17 +7,54 @@ use crate::Language;
 
 use super::{name_mapping::NameMapping, spec_ignore::SpecIgnore};
 
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Default)]
 pub struct ProjectMetadata {
+    #[serde(default)]
     pub name: String,
+    #[serde(default)]
     pub version: String,
+    #[serde(default = "default_client_name")]
+    pub client_name: String,
+    #[serde(default)]
+    pub user_agent: String,
 }
 
 impl ProjectMetadata {
     pub fn new() -> Self {
         ProjectMetadata {
-            name: String::new(),
-            version: String::new(),
+            ..Default::default()
+        }
+    }
+
+    pub fn validate(&self) -> Self {
+        let version = if self.version.is_empty() {
+            "0.1.0".to_string()
+        } else {
+            self.version.clone()
+        };
+        let client_name = if self.client_name.is_empty() {
+            let mut c_name = self.name.to_case(convert_case::Case::Pascal);
+            if !c_name.ends_with("Client") {
+                c_name.push_str("Client");
+            }
+            c_name
+        } else {
+            self.client_name.clone()
+        };
+        let user_agent = if self.user_agent.is_empty() {
+            format!(
+                "{}/{}",
+                self.client_name.to_case(convert_case::Case::Kebab),
+                version
+            )
+        } else {
+            self.user_agent.clone()
+        };
+        ProjectMetadata {
+            name: self.name.clone(),
+            version,
+            client_name,
+            user_agent,
         }
     }
 }
@@ -25,8 +63,6 @@ impl ProjectMetadata {
 pub struct Config {
     pub project_metadata: ProjectMetadata,
     pub name_mapping: NameMapping,
-    #[serde(default = "default_client_name")]
-    pub client_name: String,
     pub ignore: SpecIgnore,
     #[serde(default = "bool_true")]
     pub serde_skip_null: bool,
@@ -55,7 +91,6 @@ impl Default for Config {
         Config {
             project_metadata: ProjectMetadata::new(),
             name_mapping: NameMapping::new(),
-            client_name: default_client_name(),
             ignore: SpecIgnore::new(),
             serde_skip_empty_map: true,
             serde_skip_empty_vec: true,
@@ -85,5 +120,9 @@ impl Config {
 
     pub fn set_language(&mut self, language: Language) {
         self.language = language;
+    }
+
+    pub fn validate(&mut self) {
+        self.project_metadata = self.project_metadata.validate();
     }
 }

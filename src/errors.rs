@@ -24,4 +24,6 @@ pub enum GeneratorError {
     ResolveError(String),
     #[error("ObjectDatabase already contains an object {0}")]
     ObjectDatabaseDuplicateError(String),
+    #[error("Not supported for language: {0}")]
+    UnsupportedLanguageError(String),
 }
