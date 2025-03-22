@@ -17,7 +17,7 @@ use crate::{
         },
         types::{
             ContentTypeValue, ModuleInfo, ObjectDatabase, ObjectDefinition, RequestEntity,
-            ResponseEntities, ResponseEntity, StructDefinition, TransferMediaType, TypeDefinition,
+            ResponseEntities, ResponseEntity, TransferMediaType, TypeDefinition,
         },
     },
     utils::{config::Config, name_mapping::NameMapping},

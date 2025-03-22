@@ -1,9 +1,3 @@
-use std::{
-    collections::HashMap,
-    fs::{self},
-    path::PathBuf,
-};
-
 use crate::generator::types::ObjectDatabase;
 use crate::{utils::config::Config, GeneratorError};
 use oas3::Spec;

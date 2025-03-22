@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use convert_case::Casing;
 use oas3::{
-    spec::{Operation, ParameterIn, SchemaTypeSet},
+    spec::{Operation, ParameterIn},
     Spec,
 };
 use tracing::trace;

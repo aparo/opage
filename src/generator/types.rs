@@ -1,4 +1,3 @@
-use crate::generator::templates::rust::{Field, RustEnumTemplate, RustStructTemplate};
 use crate::utils::config::Config;
 use crate::GeneratorError;
 use askama::Template;

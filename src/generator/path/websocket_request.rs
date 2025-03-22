@@ -1,6 +1,4 @@
-use super::utils::{
-    generate_request_body, generate_request_body_entity, generate_responses, is_path_parameter,
-};
+use super::utils::{generate_request_body_entity, generate_responses, is_path_parameter};
 use crate::{
     generator::component::{
         object_definition::oas3_type_to_string, type_definition::get_type_from_schema,

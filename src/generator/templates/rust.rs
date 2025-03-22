@@ -80,20 +80,73 @@ pub struct RustBuilderStructTemplate<'a> {
     pub body_request: Option<TypeDefinition>,
 }
 
-#[derive(Template)]
-#[template(path = "rust/cargo.j2", escape = "none")]
+#[derive(Template, Default)]
+#[template(path = "rust/Cargo.j2", escape = "none")]
 pub struct CargoTemplate<'a> {
-    pub name: &'a str,
-    pub version: &'a str,
+    pub package_name: &'a str,
+    pub package_version: Option<&'a str>,
+    pub lambda_version: bool,
+    pub info_email: Option<String>,
+    pub app_description: Option<String>,
+    pub license_info: Option<String>,
+    pub publish_rust_registry: Option<String>,
+    pub repository_url: Option<String>,
+    pub documentation_url: Option<String>,
+    pub home_page_url: Option<String>,
+    pub serde_with: bool,
+    pub has_uuids: bool,
+    pub hyper: bool,
+    pub hyper0x: bool,
+    pub with_aws_v4_signature: bool,
+    pub reqwest: bool,
+    pub support_async: bool,
+    pub support_middleware: bool,
+    pub support_token_source: bool,
+    pub reqwest_trait: bool,
+    pub mockall: bool,
+    pub use_bon_builder: bool,
 }
+// impl<'a> Default in CargoTemplate<'a> {
+//     fn default() -> Self {
+//         Self {
+//             package_name: "my_project",
+//             package_version: Some("0.1.0".to_string()),
+//             lambda_version: false,
+//             info_email: None,
+//             app_description: None,
+//             license_info: None,
+//             publish_rust_registry: None,
+//             repository_url: None,
+//             documentation_url: None,
+//             home_page_url: None,
+//             serde_with: false,
+//             has_uuids: false,
+//             hyper: false,
+//             hyper0x: false,
+//             with_aws_v4_signature: false,
+//             reqwest: true,
+//             support_async: true,
+//             support_middleware: true,
+//             support_token_source: false,
+//             reqwest_trait: true,
+//             mockall: false,
+//             use_bon_builder: true,
+//         }
+//     }
+// }
 
 pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<(), GeneratorError> {
     // producing Cargo.toml
     let cargo_target_file = output_dir.join("Cargo.toml");
 
     let template = CargoTemplate {
-        name: config.project_metadata.name.as_str(),
-        version: config.project_metadata.version.as_str(),
+        package_name: config.project_metadata.name.as_str(),
+        package_version: Some(&config.project_metadata.version),
+        support_async: true,
+        support_middleware: true,
+        reqwest_trait: true,
+        use_bon_builder: true,
+        ..Default::default()
     }
     .render()
     .unwrap();
