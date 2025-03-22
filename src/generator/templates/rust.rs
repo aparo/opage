@@ -17,6 +17,10 @@ pub const RUST_PRIMITIVE_TYPES: [&str; 13] = [
 ];
 
 #[derive(Template)]
+#[template(path = "rust/gitignore.j2", escape = "none")]
+pub struct RustGitIgnoreTemplate {}
+
+#[derive(Template)]
 #[template(path = "rust/enum.j2", escape = "none")]
 pub struct RustEnumTemplate<'a> {
     pub imports: Vec<String>,
@@ -84,6 +88,7 @@ pub struct CargoTemplate<'a> {
 }
 
 pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<(), GeneratorError> {
+    // producing Cargo.toml
     let cargo_target_file = output_dir.join("Cargo.toml");
 
     let template = CargoTemplate {
@@ -95,6 +100,12 @@ pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<()
 
     write_filename(&cargo_target_file, &template)?;
 
+    // producing .gitignore
+    let git_ignore_file = output_dir.join(".gitignore");
+    let template = RustGitIgnoreTemplate {}.render().unwrap();
+    write_filename(&git_ignore_file, &template)?;
+
+    // producing other files
     let files = vec![
         (
             embed_file::embed_string!("embedded/rust/auth_middleware.rs"),
@@ -390,6 +401,19 @@ pub fn generate_clients(
         if path.is_empty() {
             path = "lib".to_owned();
         }
+        let mut final_client_code = String::new();
+        // we add the client_init_code
+        let client_init_template = RustClientInitTemplate {
+            name: config.project_metadata.name.as_str(),
+            client_name: config.project_metadata.client_name.as_str(),
+            server_url: config.project_metadata.server_url.as_str(),
+            user_agent: config.project_metadata.user_agent.as_str(),
+            version: config.project_metadata.version.as_str(),
+        };
+        final_client_code.push_str(&client_init_template.render().unwrap());
+        final_client_code.push_str("\n");
+        final_client_code.push_str(&client_code);
+        final_client_code.push_str("}\n");
 
         let full_path = target_dir.join(format!("{}.rs", path));
         println!(
@@ -439,6 +463,12 @@ pub fn generate_clients(
     Ok(())
 }
 
+// extract scoped name from the full name
+fn extract_base_name(name: &str) -> String {
+    let parts = name.split("::").collect::<Vec<&str>>();
+    parts.iter().take(parts.len() - 1).join("::")
+}
+
 pub fn write_object_database(
     output_dir: &PathBuf,
     object_database: &ObjectDatabase,
@@ -448,145 +478,182 @@ pub fn write_object_database(
     let target_dir = if config.name_mapping.use_scope {
         output_dir.join("src")
     } else {
-        output_dir.join("src").join("models")
+        output_dir.join("src")
     };
-    let mut type_map: HashMap<String, (Vec<String>, Vec<String>)> =
-        std::collections::HashMap::new();
 
-    let mut mods_map: HashMap<String, Vec<String>> = HashMap::new();
+    for item in object_database.iter() {
+        println!("Object: {}", item.key());
+    }
 
     std::fs::create_dir_all(&target_dir).expect("Creating objects dir failed");
 
-    for item in object_database.iter() {
-        let object_definition = item.value();
-        let object_name = get_object_name(object_definition);
+    let chunks = object_database
+        .iter()
+        .chunk_by(|f| extract_base_name(&f.key()));
 
-        let module_name = name_mapping.name_to_module_name(&object_name);
+    let mut grouped_objects: Vec<_> = chunks.into_iter().collect();
+
+    grouped_objects.sort_by(|a, b| a.0.cmp(&b.0));
+
+    for (namespace, group) in grouped_objects {
+        let mut type_map: HashMap<String, (Vec<String>, Vec<String>)> =
+            std::collections::HashMap::new();
+        let mut mods_map: HashMap<String, Vec<String>> = HashMap::new();
+
+        let mut items = group.map(|f| f.clone()).collect::<Vec<_>>();
+        items.sort_by(|a, b| a.name().cmp(&b.name()));
 
         let target_file = target_dir.join(format!(
             "{}.rs",
-            module_name.replace(".", "/").replace("::", "/")
+            namespace.replace(".", "/").replace("::", "/")
         ));
-        let namespace = extract_rust_namespace(&module_name);
+        let mut struct_codes = String::new();
+        let mut all_imports = HashSet::new();
+        for object_definition in items.iter() {
+            let object_name = get_object_name(object_definition);
 
-        match object_definition {
-            ObjectDefinition::Struct(struct_definition) => {
-                let mut result = modules_to_string(&struct_definition.get_required_modules());
+            let module_name = name_mapping.name_to_module_name(&object_name);
+
+            let namespace = extract_rust_namespace(&module_name);
+
+            match object_definition {
+                ObjectDefinition::Struct(struct_definition) => {
+                    for module in struct_definition.get_required_modules() {
+                        all_imports.insert(module.to_use());
+                    }
+
+                    let mut result = String::new();
+                    result.push_str("\n");
+                    result.push_str(&struct_definition.to_string(true, config)?);
+                    struct_codes.push_str(&result);
+                    // write_filename(&target_file, &result).unwrap();
+                    let mut mods = vec![];
+                    if mods_map.contains_key(&namespace) {
+                        mods = mods_map.get(&namespace).unwrap().clone();
+                    }
+                    mods.push(format!(
+                        "pub mod {};",
+                        &target_file.file_stem().unwrap().to_str().unwrap()
+                    ));
+                    mods_map.insert(namespace, mods);
+                }
+                ObjectDefinition::Enum(enum_definition) => {
+                    for module in enum_definition.get_required_modules() {
+                        all_imports.insert(module.to_use());
+                    }
+
+                    let mut result = String::new();
+                    result.push_str("\n");
+                    result.push_str(&enum_definition.to_string(true, config)?);
+                    struct_codes.push_str(&result);
+                    // write_filename(&target_file, &result).unwrap();
+                    // we update the mods list
+                    let mut mods = vec![];
+                    if mods_map.contains_key(&namespace) {
+                        mods = mods_map.get(&namespace).unwrap().clone();
+                    }
+                    mods.push(format!(
+                        "pub mod {};",
+                        &target_file.file_stem().unwrap().to_str().unwrap()
+                    ));
+                    mods_map.insert(namespace, mods);
+                }
+                ObjectDefinition::Primitive(primitive_definition) => {
+                    let mut imports = vec![];
+                    let mut codes = vec![];
+                    if type_map.contains_key(&namespace) {
+                        let (import, code) = type_map.get(&namespace).unwrap();
+                        imports = import.clone();
+                        codes = code.clone();
+                    }
+
+                    if let Some(module) = &primitive_definition.primitive_type.module {
+                        imports.push(module.to_use());
+                    }
+
+                    let description = fix_rust_description(
+                        "",
+                        &primitive_definition
+                            .description
+                            .as_ref()
+                            .map_or("", |d| d.as_str()),
+                    );
+
+                    let template = RustTypeTemplate {
+                        name: extract_rust_name(&primitive_definition.name).as_str(),
+                        description: description.as_str(),
+                        value: extract_rust_name(&primitive_definition.primitive_type.name)
+                            .as_str(),
+                    }
+                    .render()
+                    .unwrap();
+
+                    codes.push(template);
+                    type_map.insert(namespace, (imports, codes));
+                }
+            }
+        }
+
+        let mut created_modules = vec![];
+
+        for (module_name, mods) in mods_map.iter() {
+            let mut mods = mods.clone();
+            let target_file = target_dir.join(format!("{}/mod.rs", module_name.replace("::", "/")));
+            mods.sort();
+            let mut result = mods.join("\n");
+
+            if type_map.contains_key(module_name) {
+                let (imports, codes) = type_map.get(module_name).unwrap();
+                let mut imports = imports.clone();
+                imports.sort();
                 result.push_str("\n");
-                result.push_str(&struct_definition.to_string(true, config)?);
-                write_filename(&target_file, &result).unwrap();
-                let mut mods = vec![];
-                if mods_map.contains_key(&namespace) {
-                    mods = mods_map.get(&namespace).unwrap().clone();
-                }
-                mods.push(format!(
-                    "pub mod {};",
-                    &target_file.file_stem().unwrap().to_str().unwrap()
-                ));
-                mods_map.insert(namespace, mods);
-            }
-            ObjectDefinition::Enum(enum_definition) => {
-                let mut result = modules_to_string(&enum_definition.get_required_modules());
+                result.push_str(&imports.join("\n"));
                 result.push_str("\n");
-                result.push_str(&enum_definition.to_string(true, config)?);
-                write_filename(&target_file, &result).unwrap();
-                // we update the mods list
-                let mut mods = vec![];
-                if mods_map.contains_key(&namespace) {
-                    mods = mods_map.get(&namespace).unwrap().clone();
-                }
-                mods.push(format!(
-                    "pub mod {};",
-                    &target_file.file_stem().unwrap().to_str().unwrap()
-                ));
-                mods_map.insert(namespace, mods);
+                result.push_str(&codes.join("\n"));
             }
-            ObjectDefinition::Primitive(primitive_definition) => {
-                let mut imports = vec![];
-                let mut codes = vec![];
-                if type_map.contains_key(&namespace) {
-                    let (import, code) = type_map.get(&namespace).unwrap();
-                    imports = import.clone();
-                    codes = code.clone();
-                }
 
-                if let Some(module) = &primitive_definition.primitive_type.module {
-                    imports.push(module.to_use());
-                }
+            write_filename(&target_file, &result).unwrap();
+            created_modules.push(module_name);
+        }
 
-                let description = fix_rust_description(
-                    "",
-                    &primitive_definition
-                        .description
-                        .as_ref()
-                        .map_or("", |d| d.as_str()),
-                );
-
-                let template = RustTypeTemplate {
-                    name: extract_rust_name(&primitive_definition.name).as_str(),
-                    description: description.as_str(),
-                    value: extract_rust_name(&primitive_definition.primitive_type.name).as_str(),
-                }
-                .render()
-                .unwrap();
-
-                codes.push(template);
-                type_map.insert(namespace, (imports, codes));
+        let mut types = String::new();
+        for (module_name, (imports, codes)) in type_map.iter() {
+            if created_modules.contains(&module_name) {
+                continue;
             }
+            for import in imports {
+                all_imports.insert(import.clone());
+            }
+            // let target_file = target_dir.join(format!("{}/mod.rs", module_name.replace("::", "/")));
+            types.push_str(&codes.join("\n"));
+            created_modules.push(module_name);
         }
-    }
-    let mut created_modules = vec![];
-
-    for (module_name, mods) in mods_map.iter() {
-        let mut mods = mods.clone();
-        let target_file = target_dir.join(format!("{}/mod.rs", module_name.replace("::", "/")));
-        mods.sort();
-        let mut result = mods.join("\n");
-
-        if type_map.contains_key(module_name) {
-            let (imports, codes) = type_map.get(module_name).unwrap();
-            let mut imports = imports.clone();
-            imports.sort();
-            result.push_str("\n");
-            result.push_str(&imports.join("\n"));
-            result.push_str("\n");
-            result.push_str(&codes.join("\n"));
-        }
-
-        write_filename(&target_file, &result).unwrap();
-        created_modules.push(module_name);
-    }
-
-    for (module_name, (imports, codes)) in type_map.iter() {
-        if created_modules.contains(&module_name) {
-            continue;
-        }
-        let target_file = target_dir.join(format!("{}/mod.rs", module_name.replace("::", "/")));
-        let mut imports = imports.clone();
+        let mut imports = all_imports.iter().cloned().collect::<Vec<String>>();
         imports.sort();
         let mut result = imports.join("\n");
         result.push_str("\n");
-        result.push_str(&codes.join("\n"));
+        result.push_str(&types);
+        result.push_str(&struct_codes);
         write_filename(&target_file, &result).unwrap();
-        created_modules.push(module_name);
+        println!("Writing to {} \n{}", target_file.to_str().unwrap(), &result);
     }
 
-    let target_mod = target_dir.join("mod.rs");
-    let mut mods = vec![];
+    // let target_mod = target_dir.join("mod.rs");
+    // let mut mods = vec![];
 
-    for struct_name in object_database.iter().map(|x| x.key().clone()) {
-        mods.push(
-            format!(
-                "pub mod {};\n",
-                name_mapping.name_to_module_name(&struct_name)
-            )
-            .to_string(),
-        )
-    }
+    // for struct_name in object_database.iter().map(|x| x.key().clone()) {
+    //     mods.push(
+    //         format!(
+    //             "pub mod {};\n",
+    //             name_mapping.name_to_module_name(&struct_name)
+    //         )
+    //         .to_string(),
+    //     )
+    // }
 
-    mods.sort();
-    let result = mods.join("\n");
-    write_filename(&target_mod, &result)?;
+    // mods.sort();
+    // let result = mods.join("\n");
+    // write_filename(&target_mod, &result)?;
 
     Ok(())
 }
@@ -641,11 +708,11 @@ pub fn render_struct_definition(
     let mut fields: Vec<Field> = vec![];
     for (_, property) in &struct_definition.properties {
         let mut annotations = vec![];
-        let mut serde_parts = vec![];
+        let mut serde_parts = HashSet::new();
         if serializable
             && (property.name != property.real_name || is_private_name(&property.real_name))
         {
-            serde_parts.push(format!("alias = \"{}\"", property.real_name));
+            serde_parts.insert(format!("alias = \"{}\"", property.real_name));
         }
         let field_description = fix_rust_description(
             "  ",
@@ -653,22 +720,22 @@ pub fn render_struct_definition(
         );
 
         if property.type_name.starts_with("Vec<") {
-            serde_parts.push("default".to_string());
-            serde_parts.push("skip_serializing_if = \"Vec::is_empty\"".to_string());
+            serde_parts.insert("default".to_string());
+            serde_parts.insert("skip_serializing_if = \"Vec::is_empty\"".to_string());
         } else if property.type_name.starts_with("Map<") {
-            serde_parts.push("default".to_string());
-            serde_parts.push("skip_serializing_if = \"Map::is_empty\"".to_string());
+            serde_parts.insert("default".to_string());
+            serde_parts.insert("skip_serializing_if = \"Map::is_empty\"".to_string());
         } else if !property.required && serializable {
             if config.serde_skip_null {
-                serde_parts.push("default".to_string());
-                serde_parts.push("skip_serializing_if = \"Option::is_none\"".to_string());
+                serde_parts.insert("default".to_string());
+                serde_parts.insert("skip_serializing_if = \"Option::is_none\"".to_string());
             } else {
-                serde_parts.push("default".to_string());
+                serde_parts.insert("default".to_string());
             }
         }
         if has_default {
             if serde_parts.contains(&"default".to_string()) {
-                serde_parts.push("default".to_string());
+                serde_parts.insert("default".to_string());
             }
         }
 
@@ -677,7 +744,9 @@ pub fn render_struct_definition(
             || property.type_name.starts_with("Map<")
         {
             if !serde_parts.is_empty() {
-                annotations.push(format!("#[serde({})]", serde_parts.join(", ")));
+                let mut serds: Vec<String> = serde_parts.iter().cloned().collect();
+                serds.sort();
+                annotations.push(format!("#[serde({})]", serds.join(", ")));
             }
             fields.push(Field {
                 annotations,
@@ -688,7 +757,9 @@ pub fn render_struct_definition(
             });
         } else {
             if serializable {
-                annotations.push(format!("#[serde({})]", serde_parts.join(", ")));
+                let mut serds: Vec<String> = serde_parts.iter().cloned().collect();
+                serds.sort();
+                annotations.push(format!("#[serde({})]", serds.join(", ")));
             }
             let name = extract_rust_name(&property.name);
             fields.push(Field {

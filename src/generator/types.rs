@@ -71,6 +71,16 @@ pub enum ObjectDefinition {
     Primitive(PrimitiveDefinition),
 }
 
+impl ObjectDefinition {
+    pub fn name(&self) -> String {
+        match self {
+            ObjectDefinition::Struct(struct_definition) => struct_definition.name.clone(),
+            ObjectDefinition::Enum(enum_definition) => enum_definition.name.clone(),
+            ObjectDefinition::Primitive(primitive_definition) => primitive_definition.name.clone(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct EnumValue {
     pub name: String,

@@ -17,6 +17,8 @@ pub struct ProjectMetadata {
     pub client_name: String,
     #[serde(default)]
     pub user_agent: String,
+    #[serde(default = "default_server_url")]
+    pub server_url: String,
 }
 
 impl ProjectMetadata {
@@ -55,6 +57,7 @@ impl ProjectMetadata {
             version,
             client_name,
             user_agent,
+            server_url: self.server_url.clone(),
         }
     }
 }
@@ -80,6 +83,10 @@ pub struct Config {
 
 pub fn default_client_name() -> String {
     "Client".to_string()
+}
+
+pub fn default_server_url() -> String {
+    "http://localhost:8080".to_string()
 }
 
 pub fn default_language() -> Language {

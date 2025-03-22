@@ -2,7 +2,9 @@
 {{description}}
 {%~ endif -%}
 pub {{ name }}(&self{%- for prop in required_properties -%}, {{prop.name}}: {{prop.type_name}}{%- endfor -%}) -> builders::{{ builder_name }} {
-  buildes::{{ builder_name }}::client(self).{%- for prop in required_properties -%}.{{prop.name}}({{prop.name}}){%- endfor -%}
+  let mut builder = builders::{{ builder_name }}::default();
+  let builder = builder.client(self.clone()).{%- for prop in required_properties -%}.{{prop.name}}({{prop.name}}){%- endfor -%};
+  builder.clone()
 }
 
 
