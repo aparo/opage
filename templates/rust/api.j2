@@ -1,0 +1,103 @@
+{% include "partial_header.jinja2" %}
+
+use async_trait::async_trait;
+{% if mockall %}
+#[cfg(feature = "mockall")]
+use mockall::automock;
+{% endif %}
+use reqwest;
+use std::sync::Arc;
+use serde::{Deserialize, Serialize, de::Error as _};
+use crate::{apis::ResponseContent, models};
+use super::{Error, configuration};
+use crate::apis::ContentType;
+
+{% if mockall %}
+#[cfg_attr(feature = "mockall", automock)]
+{% endif %}
+#[async_trait]
+pub trait {{ classname }}: Send + Sync {
+{% for operation in operations %}
+    /// {{ operation.httpMethod }} {{ operation.path }}
+    {% if operation.notes %}
+    ///
+    /// {{ operation.notes }}
+    {% endif %}
+    {% if operation.vendorExtensions.x_group_parameters %}
+    async fn {{ operation.operationId }}(&self, params: {{ operation.operationIdCamelCase }}Params) -> Result<{{ "ResponseContent<" if operation.supportMultipleResponses }}{{ operation.operationIdCamelCase }}Success{{ ">" if operation.supportMultipleResponses }}{{ operation.returnType if not operation.supportMultipleResponses }}, Error<{{ operation.operationIdCamelCase }}Error>>;
+    {% else %}
+    async fn {{ operation.operationId }}(&self, {% for param in operation.allParams %}{{ param.paramName }}: {% if not param.required %}Option<{% endif %}{% if param.isNullable %}Option<{% endif %}{{ param.dataType }}{% if param.isNullable %}>{% endif %}{% if not param.required %}>{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}) -> Result<{{ "ResponseContent<" if operation.supportMultipleResponses }}{{ operation.operationIdCamelCase }}Success{{ ">" if operation.supportMultipleResponses }}{{ operation.returnType if not operation.supportMultipleResponses }}, Error<{{ operation.operationIdCamelCase }}Error>>;
+    {% endif %}
+{% endfor %}
+}
+
+pub struct {{ classname }}Client {
+    configuration: Arc<configuration::Configuration>
+}
+
+impl {{ classname }}Client {
+    pub fn new(configuration: Arc<configuration::Configuration>) -> Self {
+        Self { configuration }
+    }
+}
+
+{% for operation in operations %}
+{% if operation.vendorExtensions.x_group_parameters %}
+/// Struct for passing parameters to the method [`{{ operation.operationId }}`]
+#[derive(Clone, Debug)]
+{% if operation.useBonBuilder %}
+#[cfg_attr(feature = "bon", derive(::bon::Builder))]
+{% endif %}
+pub struct {{ operation.operationIdCamelCase }}Params {
+    {% for param in operation.allParams %}
+    /// {{ param.description }}
+    pub {{ param.paramName }}: {% if not param.required %}Option<{% endif %}{% if param.isNullable %}Option<{% endif %}{{ param.dataType }}{% if param.isNullable %}>{% endif %}{% if not param.required %}>{% endif %},
+    {% endfor %}
+}
+{% endif %}
+{% endfor %}
+
+#[async_trait]
+impl {{ classname }} for {{ classname }}Client {
+    {% for operation in operations %}
+    async fn {{ operation.operationId }}(&self, {% if operation.vendorExtensions.x_group_parameters %}params: {{ operation.operationIdCamelCase }}Params{% else %}{% for param in operation.allParams %}{{ param.paramName }}: {% if not param.required %}Option<{% endif %}{% if param.isNullable %}Option<{% endif %}{{ param.dataType }}{% if param.isNullable %}>{% endif %}{% if not param.required %}>{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}) -> Result<{{ "ResponseContent<" if operation.supportMultipleResponses }}{{ operation.operationIdCamelCase }}Success{{ ">" if operation.supportMultipleResponses }}{{ operation.returnType if not operation.supportMultipleResponses }}, Error<{{ operation.operationIdCamelCase }}Error>> {
+        // Implementation logic here
+    }
+    {% endfor %}
+}
+
+{% if supportMultipleResponses %}
+{% for operation in operations %}
+/// Struct for typed successes of method [`{{ operation.operationId }}`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum {{ operation.operationIdCamelCase }}Success {
+    {% for response in operation.responses %}
+    {% if response.is2xx %}
+    Status{{ response.code }}({{ response.dataType }}),
+    {% endif %}
+    {% endfor %}
+    UnknownValue(serde_json::Value),
+}
+{% endfor %}
+{% endif %}
+
+{% for operation in operations %}
+/// Struct for typed errors of method [`{{ operation.operationId }}`]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum {{ operation.operationIdCamelCase }}Error {
+    {% for response in operation.responses %}
+    {% if response.is4xx %}
+    Status{{ response.code }}({{ response.dataType }}),
+    {% endif %}
+    {% if response.is5xx %}
+    Status{{ response.code }}({{ response.dataType }}),
+    {% endif %}
+    {% if response.isDefault %}
+    DefaultResponse({{ response.dataType }}),
+    {% endif %}
+    {% endfor %}
+    UnknownValue(serde_json::Value),
+}
+{% endfor %}

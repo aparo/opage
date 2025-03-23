@@ -1,7 +1,9 @@
 {
     "project_metadata": {
         "name": "opensearch-client",
-        "version": "2.9.0"
+        "description": "Rust Client for OpenSearch",
+        "version": "2.9.0",
+        "info_email": "alberto.paro@gmail.com"
     },
     "client_name": "OpenSearchClient",
     "name_mapping": {

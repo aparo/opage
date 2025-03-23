@@ -1,8 +1,8 @@
 use std::error;
 use std::fmt;
-{{#withAWSV4Signature}}
+{% if with_aws_v4_signature %}
 use aws_sigv4;
-{{/withAWSV4Signature}}
+{% endif %}
 
 #[derive(Debug, Clone)]
 pub struct ResponseContent<T> {
@@ -14,82 +14,82 @@ pub struct ResponseContent<T> {
 #[derive(Debug)]
 pub enum Error<T> {
     Reqwest(reqwest::Error),
-    {{#supportMiddleware}}
+    {% if support_middleware %}
     ReqwestMiddleware(reqwest_middleware::Error),
-    {{/supportMiddleware}}
+    {% endif %}
     Serde(serde_json::Error),
     Io(std::io::Error),
     ResponseError(ResponseContent<T>),
-    {{#withAWSV4Signature}}
+    {% if with_aws_v4_signature %}
     AWSV4SignatureError(aws_sigv4::http_request::Error),
-    {{/withAWSV4Signature}}
-    {{#supportTokenSource}}
+    {% endif %}
+    {% if support_token_source %}
     TokenSource(Box<dyn std::error::Error + Send + Sync>),
-    {{/supportTokenSource}}
+    {% endif %}
 }
 
-impl <T> fmt::Display for Error<T> {
+impl<T> fmt::Display for Error<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (module, e) = match self {
             Error::Reqwest(e) => ("reqwest", e.to_string()),
-            {{#supportMiddleware}}
+            {% if support_middleware %}
             Error::ReqwestMiddleware(e) => ("reqwest-middleware", e.to_string()),
-            {{/supportMiddleware}}
+            {% endif %}
             Error::Serde(e) => ("serde", e.to_string()),
             Error::Io(e) => ("IO", e.to_string()),
             Error::ResponseError(e) => ("response", format!("status code {}", e.status)),
-            {{#withAWSV4Signature}}
+            {% if with_aws_v4_signature %}
             Error::AWSV4SignatureError(e) => ("aws v4 signature", e.to_string()),
-            {{/withAWSV4Signature}}
-            {{#supportTokenSource}}
+            {% endif %}
+            {% if support_token_source %}
             Error::TokenSource(e) => ("token source failure", e.to_string()),
-            {{/supportTokenSource}}
+            {% endif %}
         };
         write!(f, "error in {}: {}", module, e)
     }
 }
 
-impl <T: fmt::Debug> error::Error for Error<T> {
+impl<T: fmt::Debug> error::Error for Error<T> {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         Some(match self {
             Error::Reqwest(e) => e,
-            {{#supportMiddleware}}
+            {% if support_middleware %}
             Error::ReqwestMiddleware(e) => e,
-            {{/supportMiddleware}}
+            {% endif %}
             Error::Serde(e) => e,
             Error::Io(e) => e,
             Error::ResponseError(_) => return None,
-            {{#withAWSV4Signature}}
+            {% if with_aws_v4_signature %}
             Error::AWSV4SignatureError(_) => return None,
-            {{/withAWSV4Signature}}
-            {{#supportTokenSource}}
+            {% endif %}
+            {% if support_token_source %}
             Error::TokenSource(e) => &**e,
-            {{/supportTokenSource}}
+            {% endif %}
         })
     }
 }
 
-impl <T> From<reqwest::Error> for Error<T> {
+impl<T> From<reqwest::Error> for Error<T> {
     fn from(e: reqwest::Error) -> Self {
         Error::Reqwest(e)
     }
 }
 
-{{#supportMiddleware}}
+{% if support_middleware %}
 impl<T> From<reqwest_middleware::Error> for Error<T> {
     fn from(e: reqwest_middleware::Error) -> Self {
         Error::ReqwestMiddleware(e)
     }
 }
+{% endif %}
 
-{{/supportMiddleware}}
-impl <T> From<serde_json::Error> for Error<T> {
+impl<T> From<serde_json::Error> for Error<T> {
     fn from(e: serde_json::Error) -> Self {
         Error::Serde(e)
     }
 }
 
-impl <T> From<std::io::Error> for Error<T> {
+impl<T> From<std::io::Error> for Error<T> {
     fn from(e: std::io::Error) -> Self {
         Error::Io(e)
     }
@@ -149,88 +149,87 @@ impl From<&str> for ContentType {
     }
 }
 
-{{#apiInfo}}
-{{#apis}}
-pub mod {{{classFilename}}};
-{{/apis}}
-{{/apiInfo}}
+{% if api_info %}
+{% for api in api_info.apis %}
+pub mod {{ api.class_filename }};
+{% endfor %}
+{% endif %}
 
 pub mod configuration;
 
-{{#topLevelApiClient}}
+{% if top_level_api_client %}
 use std::sync::Arc;
 
 pub trait Api {
-    {{#apiInfo}}
-    {{#apis}}
-    fn {{{classFilename}}}(&self) -> &dyn {{{classFilename}}}::{{classname}};
-    {{/apis}}
-    {{/apiInfo}}
+    {% if api_info %}
+    {% for api in api_info.apis %}
+    fn {{ api.class_filename }}(&self) -> &dyn {{ api.class_filename }}::{{ api.classname }};
+    {% endfor %}
+    {% endif %}
 }
 
 pub struct ApiClient {
-    {{#apiInfo}}
-    {{#apis}}
-    {{{classFilename}}}: Box<dyn {{{classFilename}}}::{{classname}}>,
-    {{/apis}}
-    {{/apiInfo}}
+    {% if api_info %}
+    {% for api in api_info.apis %}
+    {{ api.class_filename }}: Box<dyn {{ api.class_filename }}::{{ api.classname }}>,
+    {% endfor %}
+    {% endif %}
 }
 
 impl ApiClient {
     pub fn new(configuration: Arc<configuration::Configuration>) -> Self {
         Self {
-            {{#apiInfo}}
-            {{#apis}}
-            {{{classFilename}}}: Box::new({{{classFilename}}}::{{classname}}Client::new(configuration.clone())),
-            {{/apis}}
-            {{/apiInfo}}
+            {% if api_info %}
+            {% for api in api_info.apis %}
+            {{ api.class_filename }}: Box::new({{ api.class_filename }}::{{ api.classname }}Client::new(configuration.clone())),
+            {% endfor %}
+            {% endif %}
         }
     }
 }
 
 impl Api for ApiClient {
-    {{#apiInfo}}
-    {{#apis}}
-    fn {{{classFilename}}}(&self) -> &dyn {{{classFilename}}}::{{classname}} {
-        self.{{{classFilename}}}.as_ref()
+    {% if api_info %}
+    {% for api in api_info.apis %}
+    fn {{ api.class_filename }}(&self) -> &dyn {{ api.class_filename }}::{{ api.classname }} {
+        self.{{ api.class_filename }}.as_ref()
     }
-    {{/apis}}
-    {{/apiInfo}}
+    {% endfor %}
+    {% endif %}
 }
 
-{{#mockall}}
+{% if mockall %}
 #[cfg(feature = "mockall")]
 pub struct MockApiClient {
-    {{#apiInfo}}
-    {{#apis}}
-    pub {{{classFilename}}}_mock: {{{classFilename}}}::Mock{{classname}},
-    {{/apis}}
-    {{/apiInfo}}
+    {% if api_info %}
+    {% for api in api_info.apis %}
+    pub {{ api.class_filename }}_mock: {{ api.class_filename }}::Mock{{ api.classname }},
+    {% endfor %}
+    {% endif %}
 }
 
 #[cfg(feature = "mockall")]
 impl MockApiClient {
     pub fn new() -> Self {
         Self {
-            {{#apiInfo}}
-            {{#apis}}
-            {{{classFilename}}}_mock: {{{classFilename}}}::Mock{{classname}}::new(),
-            {{/apis}}
-            {{/apiInfo}}
+            {% if api_info %}
+            {% for api in api_info.apis %}
+            {{ api.class_filename }}_mock: {{ api.class_filename }}::Mock{{ api.classname }}::new(),
+            {% endfor %}
+            {% endif %}
         }
     }
 }
 
 #[cfg(feature = "mockall")]
 impl Api for MockApiClient {
-    {{#apiInfo}}
-    {{#apis}}
-    fn {{{classFilename}}}(&self) -> &dyn {{{classFilename}}}::{{classname}} {
-        &self.{{{classFilename}}}_mock
+    {% if api_info %}
+    {% for api in api_info.apis %}
+    fn {{ api.class_filename }}(&self) -> &dyn {{ api.class_filename }}::{{ api.classname }} {
+        &self.{{ api.class_filename }}_mock
     }
-    {{/apis}}
-    {{/apiInfo}}
+    {% endfor %}
+    {% endif %}
 }
-{{/mockall}}
-
-{{/topLevelApiClient}}
+{% endif %}
+{% endif %}

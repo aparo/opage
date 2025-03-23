@@ -2,7 +2,7 @@ use crate::generator::component::object_definition::get_object_name;
 use crate::generator::types::{
     ModuleInfo, ObjectDatabase, ObjectDefinition, PathDatabase, PropertyDefinition, TypeDefinition,
 };
-use crate::utils::config::Config;
+use crate::utils::config::{self, Config};
 use crate::utils::file::write_filename;
 use crate::utils::name_mapping::convert_name;
 use crate::GeneratorError;
@@ -15,6 +15,25 @@ use std::path::PathBuf;
 pub const RUST_PRIMITIVE_TYPES: [&str; 13] = [
     "bool", "char", "f32", "f64", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "String",
 ];
+
+#[derive(Template)]
+#[template(path = "rust/partial_header.j2", escape = "none")]
+pub struct PartialHeaderTemplateContext {
+    pub app_name: String,
+    pub app_description: Option<String>,
+    pub version: String,
+    pub info_email: Option<String>,
+}
+
+#[derive(Template)]
+#[template(path = "rust/configuration.j2", escape = "none")]
+pub struct ConfigurationTemplateContext {
+    pub base_url: String,
+    pub user_agent: String,
+    pub support_middleware: bool,
+    pub support_token_source: bool,
+    pub with_aws_v4_signature: bool,
+}
 
 #[derive(Template)]
 #[template(path = "rust/gitignore.j2", escape = "none")]
@@ -136,6 +155,7 @@ pub struct CargoTemplate<'a> {
 // }
 
 pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<(), GeneratorError> {
+    let header = &render_partial_header(config);
     // producing Cargo.toml
     let cargo_target_file = output_dir.join("Cargo.toml");
 
@@ -157,6 +177,20 @@ pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<()
     let git_ignore_file = output_dir.join(".gitignore");
     let template = RustGitIgnoreTemplate {}.render().unwrap();
     write_filename(&git_ignore_file, &template)?;
+
+    // producing src/api/configuration.rs
+    let configuration_file = output_dir.join("src").join("api").join("configuration.rs");
+    let mut configuration_content = String::new();
+    configuration_content.push_str(header);
+    let configuration_template = ConfigurationTemplateContext {
+        base_url: config.project_metadata.server_url.clone(),
+        user_agent: config.project_metadata.user_agent.clone(),
+        support_middleware: true,
+        support_token_source: false,
+        with_aws_v4_signature: false,
+    };
+    configuration_content.push_str(&configuration_template.render().unwrap());
+    write_filename(&configuration_file, &configuration_content)?;
 
     // producing other files
     let files = vec![
@@ -206,6 +240,16 @@ pub struct BuilderInfo {
     pub name: String,
     pub code: String,
     pub imports: Vec<ModuleInfo>,
+}
+
+pub fn render_partial_header(config: &Config) -> String {
+    let context = PartialHeaderTemplateContext {
+        app_name: config.project_metadata.name.clone(),
+        app_description: config.project_metadata.description.clone(),
+        version: config.project_metadata.version.clone(),
+        info_email: config.project_metadata.info_email.clone(),
+    };
+    context.render().unwrap()
 }
 
 pub fn generate_rust_client_code(
@@ -441,13 +485,23 @@ pub fn generate_clients(
 ) -> Result<(), GeneratorError> {
     // Write all registered API calls in a client
     let target_dir = output_dir.join("src");
+    for item in path_database.iter() {
+        println!("Path: {}", item.key());
+    }
+
     let chunks = path_database.iter().chunk_by(|f| f.value().package.clone());
 
     let mut grouped_paths: Vec<_> = chunks.into_iter().collect();
 
     grouped_paths.sort_by(|a, b| a.0.cmp(&b.0));
+    let group_number = grouped_paths.len();
 
     for (namespace, group) in grouped_paths {
+        let mut namespace = namespace;
+        if namespace.is_empty() {
+            namespace = "api".to_owned();
+        }
+        tracing::debug!("Processing Namespace: {}", namespace);
         let items = group.map(|f| f.clone()).collect::<Vec<_>>();
         let (client_code, builders) = generate_rust_client_code(items, config, object_database);
         let mut path = namespace.replace(".", "/").replace("::", "/");
@@ -534,9 +588,9 @@ pub fn write_object_database(
         output_dir.join("src")
     };
 
-    for item in object_database.iter() {
-        println!("Object: {}", item.key());
-    }
+    // for item in object_database.iter() {
+    //     println!("Object: {}", item.key());
+    // }
 
     std::fs::create_dir_all(&target_dir).expect("Creating objects dir failed");
 
@@ -688,7 +742,7 @@ pub fn write_object_database(
         result.push_str(&types);
         result.push_str(&struct_codes);
         write_filename(&target_file, &result).unwrap();
-        println!("Writing to {} \n{}", target_file.to_str().unwrap(), &result);
+        // println!("Writing to {} \n{}", target_file.to_str().unwrap(), &result);
     }
 
     // let target_mod = target_dir.join("mod.rs");

@@ -12,6 +12,8 @@ pub struct ProjectMetadata {
     #[serde(default)]
     pub name: String,
     #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
     pub version: String,
     #[serde(default = "default_client_name")]
     pub client_name: String,
@@ -19,6 +21,8 @@ pub struct ProjectMetadata {
     pub user_agent: String,
     #[serde(default = "default_server_url")]
     pub server_url: String,
+    #[serde(default)]
+    pub info_email: Option<String>,
 }
 
 impl ProjectMetadata {
@@ -58,6 +62,7 @@ impl ProjectMetadata {
             client_name,
             user_agent,
             server_url: self.server_url.clone(),
+            ..self.clone()
         }
     }
 }
