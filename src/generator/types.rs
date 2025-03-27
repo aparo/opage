@@ -1,6 +1,5 @@
 use crate::utils::config::Config;
 use crate::GeneratorError;
-use askama::Template;
 use dashmap::DashMap;
 use std::collections::HashMap;
 

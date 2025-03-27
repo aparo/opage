@@ -77,7 +77,7 @@ pub fn generate_operation(
     // Response enum
     trace!("Generating response enum");
 
-    let has_response_any_multi_content_type = response_entities
+    let _has_response_any_multi_content_type = response_entities
         .iter()
         .map(|response| response.1.content.len())
         .filter(|content_type_length| content_type_length > &1)
@@ -194,7 +194,7 @@ fn media_type_enum_name(
 }
 
 fn generate_path_parameters(
-    spec: &Spec,
+    _spec: &Spec,
     operation: &Operation,
     definition_path: &Vec<String>,
     name_mapping: &NameMapping,
@@ -219,7 +219,7 @@ fn generate_path_parameters(
             let mut example: Option<serde_json::Value> = None;
             let type_name = "String".to_owned();
             operation.parameters.iter().find(|f| match f {
-                oas3::spec::ObjectOrReference::Ref { ref_path } => false,
+                oas3::spec::ObjectOrReference::Ref { ref_path: _ } => false,
                 oas3::spec::ObjectOrReference::Object(parameter) => {
                     if parameter.location != ParameterIn::Path {
                         return false;

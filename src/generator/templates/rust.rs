@@ -2,7 +2,7 @@ use crate::generator::component::object_definition::get_object_name;
 use crate::generator::types::{
     ModuleInfo, ObjectDatabase, ObjectDefinition, PathDatabase, PropertyDefinition, TypeDefinition,
 };
-use crate::utils::config::{self, Config};
+use crate::utils::config::Config;
 use crate::utils::file::write_filename;
 use crate::utils::name_mapping::convert_name;
 use crate::GeneratorError;
@@ -35,6 +35,51 @@ pub struct ConfigurationTemplateContext {
     pub with_aws_v4_signature: bool,
 }
 
+#[derive(Clone, Debug, Default)]
+struct VendorExtensions {
+    pub x_group_parameters: bool,
+}
+
+#[derive(Clone, Debug)]
+struct Response {
+    pub code: String,
+    pub data_type: String,
+    pub is_default: bool,
+    pub is2xx: bool,
+    pub is3xx: bool,
+    pub is4xx: bool,
+    pub is5xx: bool,
+}
+#[derive(Clone, Debug)]
+struct Operation {
+    pub operation_id: String,
+    pub operation_id_camel_case: String,
+    pub path: String,
+    pub http_method: String,
+    pub description: String,
+    pub method: String,
+    pub all_parameters: Vec<Field>,
+    pub support_multiple_responses: bool,
+
+    pub path_parameters: Vec<Field>,
+    pub query_parameters: Vec<Field>,
+    pub body_parameters: Vec<Field>,
+    pub response_type: TypeDefinition,
+    pub return_type: String,
+    pub vendor_extensions: VendorExtensions,
+    pub use_bon_builder: bool,
+    pub responses: Vec<Response>,
+}
+
+#[derive(Template)]
+#[template(path = "rust/api.j2", escape = "none")]
+pub struct ApiTemplateContext {
+    pub classname: String,
+    pub mockall: bool,
+    pub operations: Vec<Operation>,
+    pub support_multiple_responses: bool,
+}
+
 #[derive(Template)]
 #[template(path = "rust/gitignore.j2", escape = "none")]
 pub struct RustGitIgnoreTemplate {}
@@ -63,7 +108,9 @@ pub struct Field {
     pub description: String,
     pub modifier: String,
     pub name: String,
-    pub typ: String,
+    pub data_type: String,
+    pub required: bool,
+    pub is_nullable: bool,
 }
 
 impl Ord for Field {
@@ -71,6 +118,7 @@ impl Ord for Field {
         self.name.cmp(&other.name)
     }
 }
+
 #[derive(Template)]
 #[template(path = "rust/struct.j2", escape = "none")]
 pub struct RustStructTemplate<'a> {
@@ -255,7 +303,7 @@ pub fn render_partial_header(config: &Config) -> String {
 pub fn generate_rust_client_code(
     paths: Vec<crate::generator::types::PathDefinition>,
     config: &Config,
-    object_database: &ObjectDatabase,
+    _object_database: &ObjectDatabase,
 ) -> (String, Vec<BuilderInfo>) {
     let mut imports = HashSet::new();
 
@@ -267,7 +315,7 @@ pub fn generate_rust_client_code(
     for path in paths.iter() {
         let required_properties = path.get_required_properties();
         let response_type = extract_default_rust_response_type(path.extract_response_type());
-        let scope: Vec<String> = vec![];
+        let _scope: Vec<String> = vec![];
         let builder_name = format!("{}Builder", convert_name(&path.name));
 
         // we build description for the function
@@ -328,7 +376,9 @@ pub fn generate_rust_client_code(
             description: fix_rust_description("", "The client used to send the request"),
             modifier: "pub".to_string(),
             name: "client".to_string(),
-            typ: config.project_metadata.client_name.clone(),
+            data_type: config.project_metadata.client_name.clone(),
+            required: true,
+            is_nullable: false,
         });
 
         for fields_group in [required_properties, optional_properties].iter() {
@@ -363,7 +413,9 @@ pub fn generate_rust_client_code(
                     ),
                     modifier: "pub".to_string(),
                     name: property.name.clone(),
-                    typ: fix_type_name_property(&property.type_name),
+                    data_type: fix_type_name_property(&property.type_name),
+                    required: property.required,
+                    is_nullable: !property.required,
                 };
                 fields.push(field);
                 processed_builder_fields.push(property.name.clone());
@@ -429,7 +481,9 @@ fn property_definition_to_field(property: &PropertyDefinition) -> Field {
         ),
         modifier: "pub".to_string(),
         name: property.name.clone(),
-        typ: fix_type_name_property(&property.type_name),
+        data_type: fix_type_name_property(&property.type_name),
+        required: property.required,
+        is_nullable: !property.required,
     }
 }
 
@@ -494,7 +548,7 @@ pub fn generate_clients(
     let mut grouped_paths: Vec<_> = chunks.into_iter().collect();
 
     grouped_paths.sort_by(|a, b| a.0.cmp(&b.0));
-    let group_number = grouped_paths.len();
+    // let group_number = grouped_paths.len();
 
     for (namespace, group) in grouped_paths {
         let mut namespace = namespace;
@@ -860,7 +914,9 @@ pub fn render_struct_definition(
                 description: field_description,
                 modifier: "pub".to_string(),
                 name: extract_rust_name(&property.name),
-                typ: property.type_name.clone(),
+                data_type: property.type_name.clone(),
+                required: property.required,
+                is_nullable: !property.required,
             });
         } else {
             if serializable {
@@ -874,7 +930,9 @@ pub fn render_struct_definition(
                 description: field_description,
                 modifier: "pub".to_string(),
                 name,
-                typ: format!("Option<{}>", extract_rust_name(&property.type_name)),
+                data_type: format!("Option<{}>", extract_rust_name(&property.type_name)),
+                required: property.required,
+                is_nullable: !property.required,
             });
         }
     }

@@ -59,7 +59,7 @@ pub fn generate_operation(
     path: &str,
     operation: &Operation,
     object_database: &ObjectDatabase,
-    path_database: &PathDatabase,
+    _path_database: &PathDatabase,
     config: &crate::utils::config::Config,
 ) -> Result<String, GeneratorError> {
     let operation_definition_path: Vec<String> = vec![path.to_owned()];

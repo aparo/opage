@@ -2,7 +2,7 @@
 use crate::models;
 use serde::{Deserialize, Serialize};
 {% for model in models %}
-{% if not model.isEnum and model.vendorExtensions.x_rust_has_byte_array %}
+{% if !model.isEnum and model.vendorExtensions.x_rust_has_byte_array %}
 use serde_with::serde_as;
 {% endif %}
 {% if model.isEnum %}
@@ -34,7 +34,7 @@ impl std::fmt::Display for {{ model.classname }} {
     }
 }
 {% endif %}
-{% if not model.isInteger %}
+{% if !model.isInteger %}
 /// {{ model.description }}
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub enum {{ model.classname }} {
@@ -67,7 +67,7 @@ impl Default for {{ model.classname }} {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "{{ model.propertyBaseName }}")]
 pub enum {{ model.classname }} {
-    {% if not model.oneOf %}
+    {% if !model.oneOf %}
     {% for mappedModel in model.mappedModels %}
     #[serde(rename="{{ mappedModel.mappingName }}")]
     {{ mappedModel.modelName }} {
@@ -75,26 +75,26 @@ pub enum {{ model.classname }} {
         {% if var.description %}
         /// {{ var.description }}
         {% endif %}
-        #[serde(rename = "{{ var.baseName }}"{% if not var.required %}, skip_serializing_if = "Option::is_none"{% endif %})]
-        {{ var.name }}: {% if not var.required %}Option<{% endif %}{% if var.isEnum %}{{ var.enumName }}{% else %}{% if var.isModel %}{% if not var.avoidBoxedModels %}Box<{% endif %}{{ var.dataType }}{% if not var.avoidBoxedModels %}>{% endif %}{% else %}{{ var.dataType }}{% endif %}{% endif %}{% if not var.required %}>{% endif %},
+        #[serde(rename = "{{ var.baseName }}"{% if !var.required %}, skip_serializing_if = "Option::is_none"{% endif %})]
+        {{ var.name }}: {% if !var.required %}Option<{% endif %}{% if var.isEnum %}{{ var.enumName }}{% else %}{% if var.isModel %}{% if !var.avoidBoxedModels %}Box<{% endif %}{{ var.data_type }}{% if !var.avoidBoxedModels %}>{% endif %}{% else %}{{ var.data_type }}{% endif %}{% endif %}{% if !var.required %}>{% endif %},
     {% endfor %}
     },
     {% endfor %}
     {% endif %}
-    {% if not model.oneOf.isEmpty %}
+    {% if !model.oneOf.isEmpty %}
     {% for oneOf in model.composedSchemas.oneOf %}
     {% if oneOf.description %}
     /// {{ oneOf.description }}
     {% endif %}
     #[serde(rename="{{ oneOf.baseName }}")]
-    {{ oneOf.name }}({% if oneOf.isModel %}{% if not oneOf.avoidBoxedModels %}Box<{% endif %}{% endif %}{{ oneOf.dataType }}{% if oneOf.isModel %}{% if not oneOf.avoidBoxedModels %}>{% endif %}{% endif %}),
+    {{ oneOf.name }}({% if oneOf.isModel %}{% if !oneOf.avoidBoxedModels %}Box<{% endif %}{% endif %}{{ oneOf.data_type }}{% if oneOf.isModel %}{% if !oneOf.avoidBoxedModels %}>{% endif %}{% endif %}),
     {% endfor %}
     {% endif %}
 }
 
 impl Default for {{ model.classname }} {
     fn default() -> Self {
-        {% if not model.oneOf %}
+        {% if !model.oneOf %}
         {% for mappedModel in model.mappedModels|slice(0, 1) %}
         Self::{{ mappedModel.modelName }} {
         {% for var in mappedModel.vars %}
@@ -103,7 +103,7 @@ impl Default for {{ model.classname }} {
         }
         {% endfor %}
         {% endif %}
-        {% if not model.oneOf.isEmpty %}
+        {% if !model.oneOf.isEmpty %}
         {% for oneOf in model.composedSchemas.oneOf|slice(0, 1) %}
         Self::{{ oneOf.name }}(Default::default())
         {% endfor %}
@@ -111,8 +111,8 @@ impl Default for {{ model.classname }} {
     }
 }
 {% endif %}
-{% if not model.isEnum %}
-{% if not model.discriminator %}
+{% if !model.isEnum %}
+{% if !model.discriminator %}
 {% if model.vendorExtensions.x_rust_has_byte_array %}#[serde_as]
 {% endif %}
 {% if model.oneOf.isEmpty %}#[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
@@ -124,8 +124,8 @@ pub struct {{ model.classname }} {
     {% if var.isByteArray %}
     {% if var.required %}#[serde_as(as = "serde_with::base64::Base64")]{% else %}#[serde_as(as = "Option<serde_with::base64::Base64>")]{% endif %}
     {% endif %}
-    #[serde(rename = "{{ var.baseName }}"{% if not var.required %}{% if var.isNullable %}, default, with = "::serde_with::rust::double_option"{% endif %}, skip_serializing_if = "Option::is_none"{% endif %}{% if var.required and var.isNullable %}, deserialize_with = "Option::deserialize"{% endif %})]
-    pub {{ var.name }}: {% if var.isNullable %}Option<{% endif %}{% if not var.required %}Option<{% endif %}{% if var.isEnum %}{% if var.isArray %}{% if var.uniqueItems %}std::collections::HashSet<{% else %}Vec<{% endif %}{% endif %}{{ var.enumName }}{% if var.isArray %}>{% endif %}{% else %}{% if var.isModel %}{% if not var.avoidBoxedModels %}Box<{% endif %}{{ var.dataType }}{% if not var.avoidBoxedModels %}>{% endif %}{% else %}{% if var.isByteArray %}Vec<u8>{% else %}{{ var.dataType }}{% endif %}{% endif %}{% endif %}{% if var.isNullable %}>{% endif %}{% if not var.required %}>{% endif %},
+    #[serde(rename = "{{ var.baseName }}"{% if !var.required %}{% if var.is_nullable %}, default, with = "::serde_with::rust::double_option"{% endif %}, skip_serializing_if = "Option::is_none"{% endif %}{% if var.required and var.is_nullable %}, deserialize_with = "Option::deserialize"{% endif %})]
+    pub {{ var.name }}: {% if var.is_nullable %}Option<{% endif %}{% if !var.required %}Option<{% endif %}{% if var.isEnum %}{% if var.isArray %}{% if var.uniqueItems %}std::collections::HashSet<{% else %}Vec<{% endif %}{% endif %}{{ var.enumName }}{% if var.isArray %}>{% endif %}{% else %}{% if var.isModel %}{% if !var.avoidBoxedModels %}Box<{% endif %}{{ var.data_type }}{% if !var.avoidBoxedModels %}>{% endif %}{% else %}{% if var.isByteArray %}Vec<u8>{% else %}{{ var.data_type }}{% endif %}{% endif %}{% endif %}{% if var.is_nullable %}>{% endif %}{% if !var.required %}>{% endif %},
 {% endfor %}
 }
 
@@ -133,16 +133,16 @@ impl {{ model.classname }} {
     {% if model.description %}
     /// {{ model.description }}
     {% endif %}
-    pub fn new({% for var in model.requiredVars %}{{ var.name }}: {% if var.isNullable %}Option<{% endif %}{% if var.isEnum %}{% if var.isArray %}{% if var.uniqueItems %}std::collections::HashSet<{% else %}Vec<{% endif %}{% endif %}{{ var.enumName }}{% if var.isArray %}>{% endif %}{% else %}{% if var.isByteArray %}Vec<u8>{% else %}{{ var.dataType }}{% endif %}{% endif %}{% if var.isNullable %}>{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}) -> {{ model.classname }} {
+    pub fn new({% for var in model.requiredVars %}{{ var.name }}: {% if var.is_nullable %}Option<{% endif %}{% if var.isEnum %}{% if var.isArray %}{% if var.uniqueItems %}std::collections::HashSet<{% else %}Vec<{% endif %}{% endif %}{{ var.enumName }}{% if var.isArray %}>{% endif %}{% else %}{% if var.isByteArray %}Vec<u8>{% else %}{{ var.data_type }}{% endif %}{% endif %}{% if var.is_nullable %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}) -> {{ model.classname }} {
         {{ model.classname }} {
             {% for var in model.vars %}
-            {{ var.name }}{% if not var.required %}: None{% else %}{% if var.isModel %}{% if not var.avoidBoxedModels %}: {% if not var.isNullable %}Box::new({{ var.name }}){% else %}if let Some(x) = {{ var.name }} { Some(Box::new(x)) } else { None }{% endif %}{% endif %}{% endif %}{% endif %},
+            {{ var.name }}{% if !var.required %}: None{% else %}{% if var.isModel %}{% if !var.avoidBoxedModels %}: {% if !var.is_nullable %}Box::new({{ var.name }}){% else %}if let Some(x) = {{ var.name }} { Some(Box::new(x)) } else { None }{% endif %}{% endif %}{% endif %}{% endif %},
             {% endfor %}
         }
     }
 }
 {% endif %}
-{% if not model.oneOf.isEmpty %}
+{% if !model.oneOf.isEmpty %}
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum {{ model.classname }} {
@@ -150,7 +150,7 @@ pub enum {{ model.classname }} {
     {% if oneOf.description %}
     /// {{ oneOf.description }}
     {% endif %}
-    {{ oneOf.name }}({% if oneOf.isModel %}{% if not oneOf.avoidBoxedModels %}Box<{% endif %}{% endif %}{{ oneOf.dataType }}{% if oneOf.isModel %}{% if not oneOf.avoidBoxedModels %}>{% endif %}{% endif %}),
+    {{ oneOf.name }}({% if oneOf.isModel %}{% if !oneOf.avoidBoxedModels %}Box<{% endif %}{% endif %}{{ oneOf.data_type }}{% if oneOf.isModel %}{% if !oneOf.avoidBoxedModels %}>{% endif %}{% endif %}),
 {% endfor %}
 }
 
