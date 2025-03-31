@@ -1,12 +1,14 @@
 use crate::generator::component::object_definition::get_object_name;
 use crate::generator::types::{
-    ModuleInfo, ObjectDatabase, ObjectDefinition, PathDatabase, PropertyDefinition, TypeDefinition,
+    ModuleInfo, ObjectDatabase, ObjectDefinition, PathDatabase, PathDefinition, PropertyDefinition,
+    TransferMediaType, TypeDefinition,
 };
 use crate::utils::config::Config;
 use crate::utils::file::write_filename;
 use crate::utils::name_mapping::convert_name;
 use crate::GeneratorError;
 use askama::Template;
+use convert_case::Casing;
 use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -58,8 +60,8 @@ struct Operation {
     pub http_method: String,
     pub description: String,
     pub method: String,
-    pub all_parameters: Vec<Field>,
     pub support_multiple_responses: bool,
+    pub all_parameters: Vec<Field>,
 
     pub path_parameters: Vec<Field>,
     pub query_parameters: Vec<Field>,
@@ -531,7 +533,188 @@ pub fn extract_default_rust_response_type(optional_response: Option<TypeDefiniti
     }
 }
 
+pub fn build_responses(path: &PathDefinition) -> Vec<Response> {
+    path.response_entities
+        .iter()
+        .map(|(status_code, entity)| {
+            let code_number = status_code.parse::<u16>().unwrap_or(0);
+            let data_type: String = if entity.content.len() > 0 {
+                let first_key = entity.content.keys().next().unwrap().to_string();
+                match entity.content.get(&first_key).unwrap() {
+                    TransferMediaType::ApplicationJson(object) => match object {
+                        Some(typ) => {
+                            if typ.name.starts_with("crate::") {
+                                typ.name.clone()
+                            } else {
+                                format!("crate::{}", typ.name)
+                            }
+                        }
+                        _ => "serde_json::Value".to_string(),
+                    },
+                    _ => "String".to_string(),
+                }
+            } else {
+                "serde_json::Value".to_string()
+            };
+            Response {
+                code: status_code.to_string(),
+                data_type,
+                is_default: code_number >= 200 && code_number < 300,
+                is2xx: code_number >= 200 && code_number < 300,
+                is3xx: code_number >= 300 && code_number < 400,
+                is4xx: code_number >= 400 && code_number < 500,
+                is5xx: code_number >= 500 && code_number < 600,
+            }
+        })
+        .collect()
+}
+
 pub fn generate_clients(
+    output_dir: &PathBuf,
+    path_database: &PathDatabase,
+    config: &Config,
+    object_database: &ObjectDatabase,
+) -> Result<(), GeneratorError> {
+    // Write all registered API calls in a client
+    let target_dir = output_dir.join("src");
+    for item in path_database.iter() {
+        println!("Path: {}", item.key());
+    }
+
+    let chunks = path_database.iter().chunk_by(|f| f.value().package.clone());
+
+    let mut grouped_paths: Vec<_> = chunks.into_iter().collect();
+
+    grouped_paths.sort_by(|a, b| a.0.cmp(&b.0));
+    // let group_number = grouped_paths.len();
+
+    for (namespace, group) in grouped_paths {
+        let mut namespace = namespace;
+        if namespace.is_empty() {
+            namespace = "api".to_owned();
+        }
+        tracing::debug!("Processing Namespace: {}", namespace);
+        let items = group.map(|f| (f.key(), f.clone())).collect::<Vec<_>>();
+        let mut operations: Vec<Operation> = vec![];
+        for (id, path) in items {
+            // we populate an operation from a PathDefinition
+            let required_properties = path.get_required_properties();
+            let response_type = extract_default_rust_response_type(path.extract_response_type());
+            let _scope: Vec<String> = vec![];
+            let path_parameters: Vec<Field> = path
+                .path_parameters
+                .parameters_struct
+                .properties
+                .iter()
+                .map(|f| property_definition_to_field(f.1))
+                .collect();
+            let query_parameters: Vec<Field> = path
+                .query_parameters
+                .query_struct
+                .properties
+                .iter()
+                .map(|f| property_definition_to_field(f.1))
+                .collect();
+            let body_parameters: Vec<Field> = path
+                .extract_body_properties()
+                .iter()
+                .map(|f| property_definition_to_field(f.1))
+                .collect();
+            let mut all_parameters = vec![];
+            all_parameters.extend(path_parameters.clone());
+            all_parameters.extend(query_parameters.clone());
+            all_parameters.extend(body_parameters.clone());
+
+            let operation = Operation {
+                operation_id: id.to_owned(),
+                operation_id_camel_case: id.to_case(convert_case::Case::Camel),
+                path: path.url.clone(),
+                http_method: path.method.to_string(),
+                description: path.description.clone(),
+                method: path.method.to_string(),
+                support_multiple_responses: path.response_entities.len() > 0,
+                all_parameters,
+                path_parameters,
+                query_parameters,
+                body_parameters,
+                response_type: path.get_request_type().unwrap(),
+                return_type: path.response_name.clone(),
+                vendor_extensions: VendorExtensions::default(),
+                responses: build_responses(&path),
+                use_bon_builder: true,
+            };
+            operations.push(operation);
+        }
+
+        let (client_code, builders) = generate_rust_client_code(items, config, object_database);
+        let mut path = namespace.replace(".", "/").replace("::", "/");
+        if path.is_empty() {
+            path = "lib".to_owned();
+        }
+        let mut final_client_code = String::new();
+        // we add the client_init_code
+        let client_init_template = RustClientInitTemplate {
+            name: config.project_metadata.name.as_str(),
+            client_name: config.project_metadata.client_name.as_str(),
+            server_url: config.project_metadata.server_url.as_str(),
+            user_agent: config.project_metadata.user_agent.as_str(),
+            version: config.project_metadata.version.as_str(),
+        };
+        final_client_code.push_str(&client_init_template.render().unwrap());
+        final_client_code.push_str("\n");
+        final_client_code.push_str(&client_code);
+        final_client_code.push_str("}\n");
+
+        let full_path = target_dir.join(format!("{}.rs", path));
+        println!(
+            "Writing to {} \n{}",
+            full_path.to_str().unwrap(),
+            &client_code
+        );
+        write_filename(&full_path, &client_code)?;
+
+        // we create builder files
+        let mut imports = vec![];
+        let mut builder_code = String::new();
+        for builder in builders {
+            for import in builder.imports {
+                let use_def = import.to_use();
+                if imports.contains(&use_def) {
+                    continue;
+                }
+                imports.push(import.to_use());
+            }
+            builder_code.push_str(&builder.code);
+            builder_code.push_str("\n");
+        }
+        let mut full_builder = String::new();
+        full_builder.push_str("use crate::Client;\n");
+        full_builder.push_str("use crate::client::ResponseValue;\n");
+        full_builder.push_str("use crate::client::Request;\n");
+        full_builder.push_str("use reqwest::Method;\n");
+        full_builder.push_str("use derive_builder::Builder;\n");
+        imports.sort();
+        for import in imports {
+            full_builder.push_str(&import);
+            full_builder.push_str("\n");
+        }
+        full_builder.push_str("\n");
+        full_builder.push_str(&builder_code);
+
+        let builder_path = target_dir.join("builders.rs");
+        println!(
+            "Writing to {} \n{}",
+            builder_path.to_str().unwrap(),
+            &full_builder
+        );
+        write_filename(&builder_path, &full_builder)?;
+    }
+
+    Ok(())
+}
+
+// old implementation that generates all the single files
+pub fn generate_clients_old(
     output_dir: &PathBuf,
     path_database: &PathDatabase,
     config: &Config,
