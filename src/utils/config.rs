@@ -68,10 +68,7 @@ impl ProjectMetadata {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct Config {
-    pub project_metadata: ProjectMetadata,
-    pub name_mapping: NameMapping,
-    pub ignore: SpecIgnore,
+pub struct RustConfig {
     #[serde(default = "bool_true")]
     pub serde_skip_null: bool,
     #[serde(default = "bool_true")]
@@ -82,6 +79,32 @@ pub struct Config {
     pub serde_serialize: bool,
     #[serde(default = "bool_true")]
     pub serde_deserialize: bool,
+    #[serde(default = "bool_true")]
+    pub use_bon_builder: bool,
+    #[serde(default)]
+    pub mockall: bool,
+}
+impl Default for RustConfig {
+    fn default() -> Self {
+        RustConfig {
+            serde_skip_null: true,
+            serde_skip_empty_vec: true,
+            serde_skip_empty_map: true,
+            serde_serialize: true,
+            serde_deserialize: true,
+            use_bon_builder: true,
+            mockall: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Config {
+    pub project_metadata: ProjectMetadata,
+    pub name_mapping: NameMapping,
+    pub ignore: SpecIgnore,
+    #[serde(default)]
+    pub rust: RustConfig,
     #[serde(default = "default_language")]
     pub language: Language,
 }
@@ -104,11 +127,7 @@ impl Default for Config {
             project_metadata: ProjectMetadata::new(),
             name_mapping: NameMapping::new(),
             ignore: SpecIgnore::new(),
-            serde_skip_empty_map: true,
-            serde_skip_empty_vec: true,
-            serde_skip_null: true,
-            serde_serialize: true,
-            serde_deserialize: true,
+            rust: RustConfig::default(),
             language: default_language(),
         }
     }

@@ -18,19 +18,17 @@ use crate::apis::ContentType;
 pub trait {{ classname }}: Send + Sync {
 {% for operation in operations %}
     /// {{ operation.http_method }} {{ operation.path }}
-    {% if operation.description.len()>0 %}
+    {%- if operation.description.len()>0 -%}
     ///
     /// {{ operation.description }}
-    {% endif %}
-    {% if operation.vendor_extensions.x_group_parameters %}
+    {%- endif %}
+    {% if operation.vendor_extensions.x_group_parameters -%}
     async fn {{ operation.operation_id }}(&self, params: {{ operation.operation_id_camel_case }}Params) -> Result<{% if operation.support_multiple_responses %}"ResponseContent<"{% endif %}{{ operation.operation_id_camel_case }}Success{% if operation.support_multiple_responses %}>{% endif %}{% if !operation.support_multiple_responses %}{{ operation.return_type }}{% endif %}, Error<{{ operation.operation_id_camel_case }}Error>>;
-    {% else %}
-    async fn {{ operation.operation_id }}(&self, {% for param in operation.all_parameters %}{{ param.name }}: {% if !param.required %}Option<{% endif %}{% if param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable %}>{% endif %}{% if !param.required %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}) -> Result<{% if operation.support_multiple_responses %}"ResponseContent<"{% endif%}{{ operation.operation_id_camel_case }}Success{% if operation.support_multiple_responses %}{{ ">" }}{% endif%}{% if !operation.support_multiple_responses %}{{ operation.return_type }}{% endif%}, Error<{{ operation.operation_id_camel_case }}Error>>;
-    {% endif %}
+    {%- else -%}
+    async fn {{ operation.operation_id }}(&self, {% for param in operation.all_parameters %}{{ param.name }}: {% if !param.required %}Option<{% endif %}{% if param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable %}>{% endif %}{% if !param.required %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}) -> Result<{% if operation.support_multiple_responses %}ResponseContent<{% endif%}{{ operation.operation_id_camel_case }}Success{% if operation.support_multiple_responses %}{{ ">" }}{% endif%}{% if !operation.support_multiple_responses %}{{ operation.return_type }}{% endif%}, Error<{{ operation.operation_id_camel_case }}Error>>;
+    {%- endif -%}
 {% endfor %}
 }
-
-
 
 pub struct {{ classname }}Client {
     configuration: Arc<configuration::Configuration>
@@ -42,32 +40,29 @@ impl {{ classname }}Client {
     }
 }
 
-
 {% for operation in operations %}
-{% if operation.vendor_extensions.x_group_parameters %}
+{%- if operation.vendor_extensions.x_group_parameters -%}
 /// Struct for passing parameters to the method [`{{ operation.operation_id }}`]
 #[derive(Clone, Debug)]
-{% if operation.use_bon_builder %}
+{%- if operation.use_bon_builder -%}
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-{% endif %}
+{%- endif -%}
 pub struct {{ operation.operation_id_camel_case }}Params {
-    {% for param in operation.all_parameters %}
+    {%- for param in operation.all_parameters -%}
     /// {{ param.description }}
     pub {{ param.name }}: {% if !param.required %}Option<{% endif %}{% if param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable %}>{% endif %}{% if !param.required %}>{% endif %},
-    {% endfor %}
+    {%- endfor %}
 }
-{% endif %}
-{% endfor %}
-
-
+{%- endif -%}
+{%- endfor -%}
 
 #[async_trait]
 impl {{ classname }} for {{ classname }}Client {
-    {% for operation in operations %}
+    {% for operation in operations -%}
     async fn {{ operation.operation_id }}(&self, {% if operation.vendor_extensions.x_group_parameters %}params: {{ operation.operation_id_camel_case }}Params{% else %}{% for param in operation.all_parameters %}{{ param.name }}: {% if !param.required %}Option<{% endif %}{% if param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable %}>{% endif %}{% if !param.required %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}{% endif %}) -> Result<{% if operation.support_multiple_responses %}"ResponseContent<"{% endif %}{{ operation.operation_id_camel_case }}Success{% if operation.support_multiple_responses %}>{% endif %}{% if !operation.support_multiple_responses %}{{ operation.return_type }}{% endif %}, Error<{{ operation.operation_id_camel_case }}Error>> {
         // Implementation logic here
     }
-    {% endfor %}
+    {%- endfor %}
 }
 
 {% if support_multiple_responses %}
@@ -92,16 +87,16 @@ pub enum {{ operation.operation_id_camel_case }}Success {
 #[serde(untagged)]
 pub enum {{ operation.operation_id_camel_case }}Error {
     {% for response in operation.responses %}
-    {% if response.is4xx %}
+    {%- if response.is4xx -%}
     Status{{ response.code }}({{ response.data_type }}),
-    {% endif %}
-    {% if response.is5xx %}
+    {%- endif -%}
+    {%- if response.is5xx -%}
     Status{{ response.code }}({{ response.data_type }}),
-    {% endif %}
-    {% if response.is_default %}
+    {%- endif -%}
+    {%- if response.is_default -%}
     DefaultResponse({{ response.data_type }}),
-    {% endif %}
-    {% endfor %}
+    {%- endif -%}
+    {%- endfor %}
     UnknownValue(serde_json::Value),
 }
 {% endfor %}
