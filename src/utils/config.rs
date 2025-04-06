@@ -81,6 +81,8 @@ pub struct RustConfig {
     pub serde_deserialize: bool,
     #[serde(default = "bool_true")]
     pub use_bon_builder: bool,
+    #[serde(default = "bool_true")]
+    pub group_parameters: bool,
     #[serde(default)]
     pub mockall: bool,
 }
@@ -93,7 +95,39 @@ impl Default for RustConfig {
             serde_serialize: true,
             serde_deserialize: true,
             use_bon_builder: true,
+            group_parameters: true,
             mockall: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct AuthConfig {
+    #[serde(default = "bool_true")]
+    pub basic: bool,
+    #[serde(default = "bool_true")]
+    pub basic_bearer: bool,
+    #[serde(default = "bool_true")]
+    pub oauth: bool,
+    #[serde(default = "bool_true")]
+    pub api_key: bool,
+    #[serde(default)]
+    pub api_key_in_query: bool,
+    #[serde(default = "bool_true")]
+    pub api_key_in_header: bool,
+    #[serde(default)]
+    pub with_aws_v4_signature: bool,
+}
+impl Default for AuthConfig {
+    fn default() -> Self {
+        AuthConfig {
+            basic: true,
+            basic_bearer: true,
+            oauth: true,
+            api_key: true,
+            api_key_in_query: false,
+            api_key_in_header: true,
+            with_aws_v4_signature: false,
         }
     }
 }
@@ -105,6 +139,8 @@ pub struct Config {
     pub ignore: SpecIgnore,
     #[serde(default)]
     pub rust: RustConfig,
+    #[serde(default)]
+    pub auth: AuthConfig,
     #[serde(default = "default_language")]
     pub language: Language,
 }
@@ -128,6 +164,7 @@ impl Default for Config {
             name_mapping: NameMapping::new(),
             ignore: SpecIgnore::new(),
             rust: RustConfig::default(),
+            auth: AuthConfig::default(),
             language: default_language(),
         }
     }

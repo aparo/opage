@@ -53,6 +53,19 @@ struct Response {
     pub is4xx: bool,
     pub is5xx: bool,
 }
+
+#[derive(Clone, Debug)]
+struct AuthMethod {
+    pub is_api_key: bool,
+    pub is_key_in_query: bool,
+    pub is_key_in_header: bool,
+    pub key_param_name: String,
+    pub is_oauth: bool,
+    pub support_token_source: bool,
+    pub is_basic: bool,
+    pub is_basic_basic: bool,
+    pub is_basic_bearer: bool,
+}
 #[derive(Clone, Debug)]
 struct Operation {
     pub operation_id: String,
@@ -60,18 +73,50 @@ struct Operation {
     pub path: String,
     pub http_method: String,
     pub description: String,
+    pub notes: Option<String>,
     pub method: String,
     pub support_multiple_responses: bool,
     pub all_parameters: Vec<Field>,
-
     pub path_parameters: Vec<Field>,
     pub query_parameters: Vec<Field>,
     pub body_parameters: Vec<Field>,
+    pub header_parameters: Vec<Field>,
+    pub form_parameters: Vec<Field>,
+    pub is_multipart: bool,
     pub response_type: TypeDefinition,
     pub return_type: String,
     pub vendor_extensions: VendorExtensions,
-    pub use_bon_builder: bool,
     pub responses: Vec<Response>,
+    pub auth_methods: Vec<AuthMethod>,
+    // configuration
+    pub use_bon_builder: bool,
+    pub group_parameters: bool,
+    pub with_aws_v4_signature: bool,
+}
+
+impl Operation {
+    pub fn has_auth_methods(&self) -> bool {
+        self.auth_methods.len() > 0
+    }
+
+    pub fn has_path_parameters(&self) -> bool {
+        self.path_parameters.len() > 0
+    }
+    pub fn has_query_parameters(&self) -> bool {
+        self.query_parameters.len() > 0
+    }
+    pub fn has_body_parameters(&self) -> bool {
+        self.body_parameters.len() > 0
+    }
+    pub fn has_header_parameters(&self) -> bool {
+        self.header_parameters.len() > 0
+    }
+    pub fn has_form_parameters(&self) -> bool {
+        self.form_parameters.len() > 0
+    }
+    pub fn has_response(&self) -> bool {
+        self.responses.len() > 0
+    }
 }
 
 #[derive(Template)]
@@ -81,6 +126,7 @@ pub struct ApiTemplateContext {
     pub mockall: bool,
     pub operations: Vec<Operation>,
     pub support_multiple_responses: bool,
+    pub with_aws_v4_signature: bool,
 }
 
 #[derive(Template)]
@@ -110,15 +156,32 @@ pub struct Field {
     pub annotations: Vec<String>,
     pub description: String,
     pub modifier: String,
+    pub base_name: String,
     pub name: String,
     pub data_type: String,
     pub required: bool,
     pub is_nullable: bool,
+    pub is_array: bool,
+    pub is_file: bool,
 }
 
 impl Ord for Field {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.name.cmp(&other.name)
+    }
+}
+
+impl Field {
+    pub fn collection_format(&self) -> String {
+        if self.is_array {
+            "multi".to_owned()
+        } else {
+            "single".to_owned()
+        }
+    }
+
+    pub fn is_deep_object(&self) -> bool {
+        self.data_type == "serde_json::Value"
     }
 }
 
@@ -379,9 +442,12 @@ pub fn generate_rust_client_code(
             description: fix_rust_description("", "The client used to send the request"),
             modifier: "pub".to_string(),
             name: "client".to_string(),
+            base_name: "client".to_string(),
             data_type: config.project_metadata.client_name.clone(),
             required: true,
             is_nullable: false,
+            is_array: false,
+            is_file: false,
         });
 
         for fields_group in [required_properties, optional_properties].iter() {
@@ -416,9 +482,12 @@ pub fn generate_rust_client_code(
                     ),
                     modifier: "pub".to_string(),
                     name: property.name.clone(),
+                    base_name: property.real_name.clone(),
                     data_type: fix_type_name_property(&property.type_name),
                     required: property.required,
                     is_nullable: !property.required,
+                    is_array: property.is_array(),
+                    is_file: property.is_file(),
                 };
                 fields.push(field);
                 processed_builder_fields.push(property.name.clone());
@@ -484,9 +553,12 @@ fn property_definition_to_field(property: &PropertyDefinition) -> Field {
         ),
         modifier: "pub".to_string(),
         name: property.name.clone(),
+        base_name: property.real_name.clone(),
         data_type: fix_type_name_property(&property.type_name),
         required: property.required,
         is_nullable: !property.required,
+        is_array: property.is_array(),
+        is_file: property.is_file(),
     }
 }
 
@@ -574,7 +646,7 @@ pub fn generate_clients(
     output_dir: &PathBuf,
     path_database: &PathDatabase,
     config: &Config,
-    object_database: &ObjectDatabase,
+    _object_database: &ObjectDatabase,
 ) -> Result<(), GeneratorError> {
     // Write all registered API calls in a client
     let target_dir = output_dir.join("src");
@@ -602,8 +674,8 @@ pub fn generate_clients(
         let mut operations: Vec<Operation> = vec![];
         for (id, path) in items {
             // we populate an operation from a PathDefinition
-            let required_properties = path.get_required_properties();
-            let response_type = extract_default_rust_response_type(path.extract_response_type());
+            let _required_properties = path.get_required_properties();
+            let _response_type = extract_default_rust_response_type(path.extract_response_type());
             let _scope: Vec<String> = vec![];
             let path_parameters: Vec<Field> = path
                 .path_parameters
@@ -635,6 +707,11 @@ pub fn generate_clients(
                 path: path.url.clone(),
                 http_method: path.method.to_string(),
                 description: path.description.clone(),
+                notes: None,               //TODO: propagate notes
+                auth_methods: vec![],      //TODO: propagate notes
+                header_parameters: vec![], //TODO: propagate headers that are missing in PathDefinition
+                form_parameters: vec![], //TODO: propagate forms that are missing in PathDefinition
+                is_multipart: false,     //TODO: propagate forms that are missing in PathDefinition
                 method: path.method.to_string(),
                 support_multiple_responses: path.response_entities.len() > 0,
                 all_parameters,
@@ -646,6 +723,8 @@ pub fn generate_clients(
                 vendor_extensions: VendorExtensions::default(),
                 responses: build_responses(&path),
                 use_bon_builder: config.rust.use_bon_builder,
+                group_parameters: config.rust.group_parameters,
+                with_aws_v4_signature: config.auth.with_aws_v4_signature,
             };
             operations.push(operation);
         }
@@ -661,6 +740,7 @@ pub fn generate_clients(
             mockall: config.rust.mockall,
             operations,
             support_multiple_responses: false,
+            with_aws_v4_signature: config.auth.with_aws_v4_signature,
         };
         let mut path = namespace.replace(".", "/").replace("::", "/");
         if path.is_empty() {
@@ -1066,9 +1146,12 @@ pub fn render_struct_definition(
                 description: field_description,
                 modifier: "pub".to_string(),
                 name: extract_rust_name(&property.name),
+                base_name: property.real_name.clone(),
                 data_type: property.type_name.clone(),
                 required: property.required,
                 is_nullable: !property.required,
+                is_array: true,
+                is_file: property.is_file(),
             });
         } else {
             if serializable {
@@ -1082,9 +1165,12 @@ pub fn render_struct_definition(
                 description: field_description,
                 modifier: "pub".to_string(),
                 name,
+                base_name: property.real_name.clone(),
                 data_type: format!("Option<{}>", extract_rust_name(&property.type_name)),
                 required: property.required,
                 is_nullable: !property.required,
+                is_array: false,
+                is_file: property.is_file(),
             });
         }
     }

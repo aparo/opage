@@ -22,8 +22,8 @@ pub trait {{ classname }}: Send + Sync {
     ///
     /// {{ operation.description }}
     {%- endif %}
-    {% if operation.vendor_extensions.x_group_parameters -%}
-    async fn {{ operation.operation_id }}(&self, params: {{ operation.operation_id_camel_case }}Params) -> Result<{% if operation.support_multiple_responses %}"ResponseContent<"{% endif %}{{ operation.operation_id_camel_case }}Success{% if operation.support_multiple_responses %}>{% endif %}{% if !operation.support_multiple_responses %}{{ operation.return_type }}{% endif %}, Error<{{ operation.operation_id_camel_case }}Error>>;
+    {% if operation.group_parameters -%}
+    async fn {{ operation.operation_id }}(&self, params: {{ operation.operation_id_camel_case }}Params) -> Result<{% if operation.support_multiple_responses %}ResponseContent<{% endif %}{{ operation.operation_id_camel_case }}Success{% if operation.support_multiple_responses %}>{% endif %}{% if !operation.support_multiple_responses %}{{ operation.return_type }}{% endif %}, Error<{{ operation.operation_id_camel_case }}Error>>;
     {%- else -%}
     async fn {{ operation.operation_id }}(&self, {% for param in operation.all_parameters %}{{ param.name }}: {% if !param.required %}Option<{% endif %}{% if param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable %}>{% endif %}{% if !param.required %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}) -> Result<{% if operation.support_multiple_responses %}ResponseContent<{% endif%}{{ operation.operation_id_camel_case }}Success{% if operation.support_multiple_responses %}{{ ">" }}{% endif%}{% if !operation.support_multiple_responses %}{{ operation.return_type }}{% endif%}, Error<{{ operation.operation_id_camel_case }}Error>>;
     {%- endif -%}
@@ -41,7 +41,7 @@ impl {{ classname }}Client {
 }
 
 {% for operation in operations %}
-{%- if operation.vendor_extensions.x_group_parameters -%}
+{%- if operation.group_parameters -%}
 /// Struct for passing parameters to the method [`{{ operation.operation_id }}`]
 #[derive(Clone, Debug)]
 {%- if operation.use_bon_builder -%}
@@ -58,11 +58,318 @@ pub struct {{ operation.operation_id_camel_case }}Params {
 
 #[async_trait]
 impl {{ classname }} for {{ classname }}Client {
-    {% for operation in operations -%}
-    async fn {{ operation.operation_id }}(&self, {% if operation.vendor_extensions.x_group_parameters %}params: {{ operation.operation_id_camel_case }}Params{% else %}{% for param in operation.all_parameters %}{{ param.name }}: {% if !param.required %}Option<{% endif %}{% if param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable %}>{% endif %}{% if !param.required %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}{% endif %}) -> Result<{% if operation.support_multiple_responses %}"ResponseContent<"{% endif %}{{ operation.operation_id_camel_case }}Success{% if operation.support_multiple_responses %}>{% endif %}{% if !operation.support_multiple_responses %}{{ operation.return_type }}{% endif %}, Error<{{ operation.operation_id_camel_case }}Error>> {
-        // Implementation logic here
+{% for operation in operations %}
+    {%- if operation.description.len()>0 -%}
+    ///
+    /// {{ operation.description }}
+    {%- endif %}
+    {%- if let Some(notes)=operation.notes -%}
+    /// {{ notes }}
+    {%- endif -%}
+    {% if operation.group_parameters %}
+    async fn {{ operation.operation_id }}(&self, params: {{ operation.operation_id_camel_case }}Params) -> Result<{% if operation.support_multiple_responses %}ResponseContent<{{ operation.operation_id_camel_case }}Success>{% else %}{{ operation.return_type }}{% endif %}, Error<{{ operation.operation_id_camel_case }}Error>> {
+        let {{ operation.operation_id_camel_case }}Params {
+            {%- for param in operation.all_parameters %}
+            {{ param.name }},
+            {%- endfor %}
+        } = params;
+    {% else %}
+    async fn {{ operation.operation_id }}(&self, {% for param in operation.all_parameters %}{{ param.name }}: {% if !param.required %}Option<{% endif %}{% if param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable %}>{% endif %}{% if !param.required %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}) -> Result<{% if operation.support_multiple_responses %}ResponseContent<{{ operation.operation_id_camel_case }}Success>{% else %}{{ operation.return_type }}{% endif %}, Error<{{ operation.operation_id_camel_case }}Error>> {
+    {% endif %}
+        let local_var_configuration = &self.configuration;
+
+        let local_var_client = &local_var_configuration.client;
+
+        let local_var_uri_str = format!("{}{{ operation.path }}", local_var_configuration.base_path{% for param in operation.path_parameters %}, {{ param.name }}={{ param.name | urlencode }}{% endfor %});
+        let mut local_var_req_builder = local_var_client.request(reqwest::Method::{{ operation.http_method }}, local_var_uri_str.as_str());
+
+{% for query_param in operation.query_parameters -%}
+    {%- if query_param.required -%}
+        {%- if query_param.is_array %}
+        local_var_req_builder = match "{{ query_param.collection_format() }}" {
+            "multi" => local_var_req_builder.query(&{{ query_param.name }}.into_iter().map(|p| ("{{ query_param.name }}".to_owned(), p.to_string())).collect::<Vec<(std::string::String, std::string::String)>>()),
+            _ => local_var_req_builder.query(&[("{{ query_param.name }}", &{{ query_param.name }}.into_iter().map(|p| p.to_string()).collect::<Vec<String>>().join(",").to_string())]),
+        };
+        {%- else -%}
+            {%- if !query_param.is_nullable %}
+        local_var_req_builder = local_var_req_builder.query(&[("{{ query_param.name }}", &{{ query_param.name }}.to_string())]);
+            {%- else -%}
+                {%- if query_param.is_deep_object() %}
+        if let Some(ref local_var_str) = {{ query_param.name }} {
+            let params = crate::apis::parse_deep_object("{{ query_param.name }}", local_var_str);
+            local_var_req_builder = local_var_req_builder.query(&params);
+        };
+                {%- else -%}
+        if let Some(ref local_var_str) = {{ query_param.name }} {
+            local_var_req_builder = local_var_req_builder.query(&[("{{ query_param.name }}", &local_var_str.to_string())]);
+        };
+                {% endif -%}
+            {%- endif -%}
+        {%- endif -%}
+    {%- else %}
+    if let Some(ref local_var_str) = {{ query_param.name }} {
+        {%- if query_param.is_array %}
+        local_var_req_builder = match "{{ query_param.collection_format() }}" {
+            "multi" => local_var_req_builder.query(&local_var_str.into_iter().map(|p| ("{{ query_param.name }}".to_owned(), p.to_string())).collect::<Vec<(std::string::String, std::string::String)>>()),
+            _ => local_var_req_builder.query(&[("{{ query_param.name }}", &local_var_str.into_iter().map(|p| p.to_string()).collect::<Vec<String>>().join(",").to_string())]),
+        };
+        {%- else -%}
+            {%- if query_param.is_deep_object() %}
+        let params = crate::apis::parse_deep_object("{{ query_param.name }}", local_var_str);
+        local_var_req_builder = local_var_req_builder.query(&params);
+            {%- else %}
+        local_var_req_builder = local_var_req_builder.query(&[("{{ query_param.name }}", &local_var_str.to_string())]);
+            {%- endif -%}
+        {%- endif %}
     }
+    {%- endif -%}
+{%- endfor %}
+
+{% if operation.has_auth_methods() -%}
+    {%- for auth_method in operation.auth_methods -%}
+        {%- if auth_method.is_api_key -%}
+            {%- if auth_method.is_key_in_query %}
+            if let Some(ref local_var_apikey) = local_var_configuration.api_key {
+                let local_var_key = local_var_apikey.key.clone();
+                let local_var_value = match local_var_apikey.prefix {
+                    Some(ref local_var_prefix) => format!("{} {}", local_var_prefix, local_var_key),
+                    None => local_var_key,
+                };
+                local_var_req_builder = local_var_req_builder.query(&[("{{ auth_method.key_param_name }}", local_var_value)]);
+            }
+            {% endif -%}
+        {%- endif -%}
+    {%- endfor -%}
+    {%- if operation.with_aws_v4_signature %}
+    if let Some(ref local_var_aws_v4_key) = local_var_configuration.aws_v4_key {
+        let local_var_new_headers = match local_var_aws_v4_key.sign(
+            &local_var_uri_str,
+            "{{ operation.http_method }}",
+            {%- if operation.has_body_parameters() -%}
+                {%- for body_param in operation.body_parameters %}
+                &serde_json::to_string(&{{ body_param.name }}).expect("param should serialize to string"),
+                {%- endfor -%}
+            {%- else %}
+            "",
+            {%- endif %}
+        ) {
+            Ok(new_headers) => new_headers,
+            Err(err) => return Err(Error::AWSV4SignatureError(err)),
+        };
+        for (local_var_name, local_var_value) in local_var_new_headers.iter() {
+            local_var_req_builder = local_var_req_builder.header(local_var_name.as_str(), local_var_value.as_str());
+        }
+    }
+    {%- endif -%}
+{%- endif %}
+        if let Some(ref local_var_user_agent) = local_var_configuration.user_agent {
+            local_var_req_builder = local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
+        }
+{% if operation.has_header_parameters() %}
+    {% for header_param in operation.header_parameters %}
+        {%- if header_param.required %}
+            {%- if !header_param.is_nullable %}
+            local_var_req_builder = local_var_req_builder.header(
+                "{{ header_param.name }}",
+                {{ header_param.name }}{% if header_param.is_array %}.join(","){% endif %}.to_string(),
+            );
+            {%- else %}
+            match {{ header_param.name }} {
+                Some(local_var_param_value) => {
+                    local_var_req_builder = local_var_req_builder.header(
+                        "{{ header_param.name }}",
+                        local_var_param_value{% if header_param.is_array %}.join(","){% endif %}.to_string(),
+                    );
+                },
+                None => {
+                    local_var_req_builder = local_var_req_builder.header("{{ header_param.name }}", "");
+                },
+            }
+            {%- endif %}
+        {%- else %}
+        if let Some(local_var_param_value) = {{ header_param.name }} {
+            local_var_req_builder = local_var_req_builder.header(
+                "{{ header_param.name }}",
+                local_var_param_value{% if header_param.is_array %}.join(","){% endif %}.to_string(),
+            );
+        }
+        {%- endif -%}
+    {%- endfor -%}
+{%- endif %}
+
+{% if operation.has_auth_methods() -%}
+    {%- for auth_method in operation.auth_methods -%}
+        {%- if auth_method.support_token_source %}
+        // Obtain a token from source provider.
+        // Tokens can be ID or access tokens depending on the provider type and configuration.
+        let token = local_var_configuration.token_source.token().await.map_err(Error::TokenSource)?;
+        // The token format is the responsibility of the provider, thus we just set the authorization header with whatever is given.
+        local_var_req_builder = local_var_req_builder.header(reqwest::header::AUTHORIZATION, token);
+        {% else %}
+            {%- if auth_method.is_api_key %}
+                {%- if auth_method.is_key_in_header %}
+                if let Some(ref local_var_apikey) = local_var_configuration.api_key {
+                    let local_var_key = local_var_apikey.key.clone();
+                    let local_var_value = match local_var_apikey.prefix {
+                        Some(ref local_var_prefix) => format!("{} {}", local_var_prefix, local_var_key),
+                        None => local_var_key,
+                    };
+                    local_var_req_builder = local_var_req_builder.header("{{ auth_method.key_param_name }}", local_var_value);
+                };
+                {%- endif %}
+            {%- endif %}
+            {%- if auth_method.is_basic %}
+                {%- if auth_method.is_basic_basic %}
+                if let Some(ref local_var_auth_conf) = local_var_configuration.basic_auth {
+                    local_var_req_builder = local_var_req_builder.basic_auth(local_var_auth_conf.0.to_owned(), local_var_auth_conf.1.to_owned());
+                };
+                {%- endif %}
+                {%- if auth_method.is_basic_bearer %}
+                if let Some(ref local_var_token) = local_var_configuration.bearer_access_token {
+                    local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
+                };
+                {%- endif %}
+            {% endif %}
+            {%- if auth_method.is_oauth %}
+            if let Some(ref local_var_token) = local_var_configuration.oauth_access_token {
+                local_var_req_builder = local_var_req_builder.bearer_auth(local_var_token.to_owned());
+            };
+            {%- endif %}
+        {%- endif %}
     {%- endfor %}
+{%- endif %}
+
+{% if operation.is_multipart -%}
+    {% if operation.has_form_parameters() %}
+    let mut local_var_form = reqwest::multipart::Form::new();
+    {% for form_param in operation.form_parameters -%}
+        {%- if form_param.is_file %}
+        // TODO: support file upload for '{{ form_param.name }}' parameter
+        {% else %}
+            {%- if form_param.required %}
+                {%- if !form_param.is_nullable %}
+                local_var_form = local_var_form.text(
+                    "{{ form_param.name }}",
+                    {{ form_param.name }}{% if form_param.is_array %}.into_iter().map(|p| p.to_string()).collect::<Vec<String>>().join(","){% endif %}.to_string(),
+                );
+                {% else %}
+                match {{ form_param.name }} {
+                    Some(local_var_param_value) => {
+                        local_var_form = local_var_form.text(
+                            "{{ form_param.name }}",
+                            local_var_param_value{% if form_param.is_array %}.into_iter().map(|p| p.to_string()).collect::<Vec<String>>().join(","){% endif %}.to_string(),
+                        );
+                    },
+                    None => {
+                        local_var_form = local_var_form.text("{{ form_param.name }}", "");
+                    },
+                }
+                {%- endif %}
+            {%- else %}
+            if let Some(local_var_param_value) = {{ form_param.name }} {
+                local_var_form = local_var_form.text(
+                    "{{ form_param.name }}",
+                    local_var_param_value{% if form_param.is_array %}.into_iter().map(|p| p.to_string()).collect::<Vec<String>>().join(","){% endif %}.to_string(),
+                );
+            }
+            {%- endif %}
+        {%- endif %}
+    {%- endfor %}
+    local_var_req_builder = local_var_req_builder.multipart(local_var_form);
+    {%- endif %}
+{%- else %}
+    {%- if operation.has_form_parameters() %}
+    let mut local_var_form_params = std::collections::HashMap::new();
+    {% for form_param in operation.form_parameters %}
+        {%- if form_param.is_file %}
+            {%- if form_param.required %}
+                {%- if !form_param.is_nullable %}
+                local_var_form_params.insert(
+                    "{{ form_param.name }}",
+                    unimplemented!("File form param not supported with x-www-form-urlencoded content"),
+                );
+                {%- else %}
+                match {{ form_param.name }} {
+                    Some(local_var_param_value) => {
+                        local_var_form_params.insert(
+                            "{{ form_param.name }}",
+                            unimplemented!("File form param not supported with x-www-form-urlencoded content"),
+                        );
+                    },
+                    None => {
+                        unimplemented!("Required nullable file form param not supported with x-www-form-urlencoded content");
+                    },
+                }
+                {%- endif %}
+            {-% else %}
+            if let Some(local_var_param_value) = {{ form_param.name }} {
+                local_var_form_params.insert(
+                    "{{ form_param.name }}",
+                    unimplemented!("File form param not supported with x-www-form-urlencoded content"),
+                );
+            }
+            {%- endif %}
+        {%- else %}
+            {%- if form_param.required %}
+                {%- if !form_param.is_nullable %}
+                local_var_form_params.insert(
+                    "{{ form_param.name }}",
+                    {{ form_param.name }}{% if form_param.is_array %}.into_iter().map(|p| p.to_string()).collect::<Vec<String>>().join(","){% endif %}.to_string(),
+                );
+                {%- else %}
+                match {{ form_param.name }} {
+                    Some(local_var_param_value) => {
+                        local_var_form_params.insert(
+                            "{{ form_param.name }}",
+                            local_var_param_value{% if form_param.is_array %}.into_iter().map(|p| p.to_string()).collect::<Vec<String>>().join(","){% endif %}.to_string(),
+                        );
+                    },
+                    None => {
+                        local_var_form_params.insert("{{ form_param.name }}", "");
+                    },
+                }
+                {%- endif %}
+            {%- else %}
+            if let Some(local_var_param_value) = {{ form_param.name }} {
+                local_var_form_params.insert(
+                    "{{ form_param.name }}",
+                    local_var_param_value{% if form_param.is_array %}.into_iter().map(|p| p.to_string()).collect::<Vec<String>>().join(","){% endif %}.to_string(),
+                );
+            }
+            {%- endif %}
+        {%- endif %}
+    {%- endfor %}
+    local_var_req_builder = local_var_req_builder.form(&local_var_form_params);
+    {%- endif %}
+{%- endif %}
+{% if operation.has_body_parameters() %}
+    {%- for body_param in operation.body_parameters %}
+    local_var_req_builder = local_var_req_builder.json(&{{ body_param.name }});
+    {%- endfor %}
+{%- endif %}
+
+        let local_var_req = local_var_req_builder.build()?;
+        let local_var_resp = local_var_client.execute(local_var_req).await?;
+
+        let local_var_status = local_var_resp.status();
+        let local_var_content = local_var_resp.text().await?;
+
+        if !local_var_status.is_client_error() && !local_var_status.is_server_error() {
+            {% if operation.support_multiple_responses %}
+            let local_var_entity: Option<{{ operation.operation_id_camel_case }}Success> = serde_json::from_str(&local_var_content).ok();
+            let local_var_result = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
+            Ok(local_var_result)
+            {% else %}
+            serde_json::from_str(&local_var_content).map_err(Error::from)
+            {% endif %}
+        } else {
+            let local_var_entity: Option<{{ operation.operation_id_camel_case }}Error> = serde_json::from_str(&local_var_content).ok();
+            let local_var_error = ResponseContent { status: local_var_status, content: local_var_content, entity: local_var_entity };
+            Err(Error::ResponseError(local_var_error))
+        }
+    }
+    {% endfor %}
+
 }
 
 {% if support_multiple_responses %}
@@ -72,10 +379,13 @@ impl {{ classname }} for {{ classname }}Client {
 #[serde(untagged)]
 pub enum {{ operation.operation_id_camel_case }}Success {
     {% for response in operation.responses %}
-    {% if response.is2xx %}
+    {%- if response.is2xx %}
     Status{{ response.code }}({{ response.data_type }}),
-    {% endif %}
-    {% endfor %}
+    {%- endif %}
+    {%- if response.is3xx %}
+    Status{{ response.code }}({{ response.data_type }}),
+    {%- endif %}
+    {%- endfor %}
     UnknownValue(serde_json::Value),
 }
 {% endfor %}
