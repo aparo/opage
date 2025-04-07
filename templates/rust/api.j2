@@ -41,20 +41,20 @@ impl {{ classname }}Client {
 }
 
 {% for operation in operations %}
-{%- if operation.group_parameters -%}
+{%- if operation.group_parameters %}
 /// Struct for passing parameters to the method [`{{ operation.operation_id }}`]
 #[derive(Clone, Debug)]
-{%- if operation.use_bon_builder -%}
+{%- if operation.use_bon_builder %}
 #[cfg_attr(feature = "bon", derive(::bon::Builder))]
-{%- endif -%}
+{%- endif %}
 pub struct {{ operation.operation_id_camel_case }}Params {
-    {%- for param in operation.all_parameters -%}
-    /// {{ param.description }}
-    pub {{ param.name }}: {% if !param.required %}Option<{% endif %}{% if param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable %}>{% endif %}{% if !param.required %}>{% endif %},
+    {%- for param in operation.all_parameters %}
+    {{ param.description }}
+    pub {{ param.name }}: {% if !param.required || param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable || !param.required %}>{% endif %},
     {%- endfor %}
 }
 {%- endif -%}
-{%- endfor -%}
+{%- endfor %}
 
 #[async_trait]
 impl {{ classname }} for {{ classname }}Client {

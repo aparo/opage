@@ -5,7 +5,7 @@ use crate::generator::types::{
 };
 use crate::utils::config::Config;
 use crate::utils::file::write_filename;
-use crate::utils::name_mapping::convert_name;
+use crate::utils::name_mapping::{convert_name, fix_struct_names};
 use crate::utils::string::capitalize;
 use crate::GeneratorError;
 use askama::Template;
@@ -606,6 +606,38 @@ pub fn extract_default_rust_response_type(optional_response: Option<TypeDefiniti
     }
 }
 
+pub fn extract_body_field_type(path: &PathDefinition) -> Option<Field> {
+    if let Some(object_definition) = &path.request_body {
+        match object_definition {
+            ObjectDefinition::Struct(struct_definition) => {
+                let name = struct_definition
+                    .name
+                    .clone()
+                    .to_case(convert_case::Case::Snake)
+                    .to_owned();
+                return Some(Field {
+                    annotations: vec![],
+                    description: fix_rust_description(
+                        "",
+                        &struct_definition.description.clone().unwrap_or_default(),
+                    ),
+                    modifier: "pub".to_owned(),
+                    base_name: name.clone(),
+                    name: name,
+                    data_type: format!("{}::{}", struct_definition.package, struct_definition.name),
+                    required: true,
+                    is_nullable: false,
+                    is_array: false,
+                    is_file: false,
+                });
+            }
+            // TODO manage enums
+            _ => (),
+        }
+    }
+    None
+}
+
 pub fn build_responses(path: &PathDefinition) -> Vec<Response> {
     path.response_entities
         .iter()
@@ -691,15 +723,26 @@ pub fn generate_clients(
                 .iter()
                 .map(|f| property_definition_to_field(f.1))
                 .collect();
-            let body_parameters: Vec<Field> = path
-                .extract_body_properties()
-                .iter()
-                .map(|f| property_definition_to_field(&f.1))
-                .collect();
+            let mut body_parameters: Vec<Field> = vec![];
+
+            if config.rust.group_parameters {
+                if let Some(field) = extract_body_field_type(&path) {
+                    body_parameters.push(field);
+                }
+            } else {
+                body_parameters = path
+                    .extract_body_properties()
+                    .iter()
+                    .map(|f| property_definition_to_field(&f.1))
+                    .collect();
+            }
+
             let mut all_parameters = vec![];
             all_parameters.extend(path_parameters.clone());
             all_parameters.extend(query_parameters.clone());
+
             all_parameters.extend(body_parameters.clone());
+            all_parameters.sort();
 
             let operation = Operation {
                 operation_id: id.to_owned(),
