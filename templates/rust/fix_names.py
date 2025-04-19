@@ -20,6 +20,7 @@ TEXT_CHANGES = [
     (""".isByteArray """, """.is_byte_array """),
     (""".enumName """, """.enum_name """),
     (""".isModel """, """.is_model """),
+    (""".classFilename """, """.class_filename """),
     (""".oneOf""", """.one_of"""),
     (""".propertyBaseName""", """.property_base_name"""),
     ("""requiredVars""", """required_vars"""),

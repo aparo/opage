@@ -147,6 +147,7 @@ pub struct RustEnumTemplate<'a> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Model {
     pub classname: String,
+    pub class_filename: String,
     pub description: Option<String>,
     pub is_enum: bool,
     pub is_integer: bool,
@@ -227,6 +228,12 @@ pub struct Variable {
 #[derive(Template)]
 #[template(path = "rust/model.j2", escape = "none")]
 pub struct RustModelTemplate {
+    pub models: Vec<Model>,
+}
+
+#[derive(Template)]
+#[template(path = "rust/model_mod.j2", escape = "none")]
+pub struct RustModelModuleTemplate {
     pub models: Vec<Model>,
 }
 
@@ -374,6 +381,7 @@ pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<()
         support_middleware: true,
         reqwest_trait: true,
         use_bon_builder: true,
+        serde_with: true,
         ..Default::default()
     }
     .render()
@@ -1052,11 +1060,14 @@ pub fn write_object_database(
         ));
         let mut created_modules = vec![];
 
+        let mut module_models = vec![];
+
         for object_definition in items.iter() {
             let mut all_imports = HashSet::new();
             let object_name = get_object_name(object_definition);
 
             let module_name = name_mapping.name_to_module_name(&object_name);
+            let class_filename = module_name.split("::").last().unwrap_or(&module_name);
 
             let namespace = extract_rust_namespace(&module_name);
             let mut models: Vec<Model> = vec![];
@@ -1067,6 +1078,7 @@ pub fn write_object_database(
                         all_imports.insert(module.to_use());
                     }
                     let model = Model {
+                        class_filename: class_filename.to_string(),
                         classname: struct_definition.name.clone(),
                         description: struct_definition
                             .description
@@ -1117,6 +1129,7 @@ pub fn write_object_database(
                     }
 
                     let model = Model {
+                        class_filename: class_filename.to_string(),
                         classname: enum_definition.name.clone(),
                         description: enum_definition
                             .description
@@ -1204,6 +1217,11 @@ pub fn write_object_database(
 
             // let mods = all_imports.iter().cloned().collect::<Vec<String>>();
             // mods.sort();
+            // we store module models
+            for m in models.iter() {
+                module_models.push(m.clone());
+            }
+
             let mut result = String::new();
             let template = RustModelTemplate { models };
             result.push_str(&header);
@@ -1214,16 +1232,17 @@ pub fn write_object_database(
             created_modules.push(module_name);
         }
 
-        // let mut types = String::new();
-        // for (module_name, (imports, codes)) in type_map.clone().iter() {
-        //     if created_modules.contains(&module_name) {
-        //         continue;
-        //     }
-        //     for import in imports {
-        //         all_imports.insert(import.clone());
-        //     }
-        //     // let target_file = target_dir.join(format!("{}/mod.rs", module_name.replace("::", "/")));
-        //     types.push_str(&codes.join("\n"));
+        let mut module_code = String::new();
+        module_code.push_str(header);
+        module_code.push_str("\n");
+        let template = RustModelModuleTemplate {
+            models: module_models,
+        };
+        module_code.push_str(template.render().unwrap().as_str());
+
+        let target_file = target_dir.join(format!("{}/mod.rs", "models"));
+
+        // types.push_str(&codes.join("\n"));
         //     created_modules.push(module_name);
         // }
         // let mut imports = all_imports.iter().cloned().collect::<Vec<String>>();
@@ -1231,8 +1250,12 @@ pub fn write_object_database(
         // let mut result = imports.join("\n");
         // result.push_str("\n");
         // result.push_str(&types);
-        // write_filename(&target_file, &result).unwrap();
-        // println!("Writing to {} \n{}", target_file.to_str().unwrap(), &result);
+        write_filename(&target_file, &module_code).unwrap();
+        println!(
+            "Writing to {} \n{}",
+            target_file.to_str().unwrap(),
+            &module_code
+        );
     }
 
     // let target_mod = target_dir.join("mod.rs");
