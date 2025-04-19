@@ -1016,6 +1016,7 @@ pub fn write_object_database(
     object_database: &ObjectDatabase,
     config: &Config,
 ) -> Result<(), GeneratorError> {
+    let header = &render_partial_header(config);
     let name_mapping = &config.name_mapping;
     let target_dir = if config.name_mapping.use_scope {
         output_dir.join("src")
@@ -1067,7 +1068,10 @@ pub fn write_object_database(
                     }
                     let model = Model {
                         classname: struct_definition.name.clone(),
-                        description: struct_definition.description.clone(),
+                        description: struct_definition
+                            .description
+                            .clone()
+                            .map(|d| fix_rust_description("    ", &d)),
                         is_enum: false,
                         is_integer: false,
                         rust_has_byte_array: struct_definition
@@ -1084,7 +1088,10 @@ pub fn write_object_database(
                             .map(|(_, prop)| Variable {
                                 name: prop.name.clone(),
                                 base_name: prop.real_name.clone(),
-                                description: prop.description.clone(),
+                                description: prop
+                                    .description
+                                    .clone()
+                                    .map(|d| fix_rust_description("    ", &d)),
                                 required: prop.required,
                                 is_nullable: !prop.required,
                                 is_enum: false,
@@ -1111,7 +1118,10 @@ pub fn write_object_database(
 
                     let model = Model {
                         classname: enum_definition.name.clone(),
-                        description: enum_definition.description.clone(),
+                        description: enum_definition
+                            .description
+                            .clone()
+                            .map(|d| fix_rust_description("    ", &d)),
                         is_enum: true,
                         is_integer: false,
                         rust_has_byte_array: false,
@@ -1190,19 +1200,16 @@ pub fn write_object_database(
                 }
             }
 
-            let target_file = target_dir.join(format!(
-                "{}/{}.rs",
-                module_name.replace("::", "/"),
-                &object_name
-            ));
+            let target_file = target_dir.join(format!("{}.rs", module_name.replace("::", "/")));
 
             // let mods = all_imports.iter().cloned().collect::<Vec<String>>();
             // mods.sort();
             let mut result = String::new();
             let template = RustModelTemplate { models };
+            result.push_str(&header);
             result.push_str("\n");
             result.push_str(template.render().unwrap().as_str());
-
+            println!("Writing to {} \n{}", target_file.to_str().unwrap(), &result);
             write_filename(&target_file, &result).unwrap();
             created_modules.push(module_name);
         }
