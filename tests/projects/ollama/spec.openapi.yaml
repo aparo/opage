@@ -21,44 +21,44 @@ tags:
     description: List and describe the various models available.
 
 paths:
-  # /generate:
-  #   post:
-  #     operationId: generateCompletion
-  #     tags:
-  #       - Completions
-  #     summary: Generate a response for a given prompt with a provided model.
-  #     description: The final response object will include statistics and additional data from the request.
-  #     requestBody:
-  #       content:
-  #         application/json:
-  #           schema:
-  #             $ref: '#/components/schemas/GenerateCompletionRequest'
-  #     responses:
-  #       '200':
-  #         description: Successful operation.
-  #         content:
-  #           application/x-ndjson:
-  #             schema:
-  #               $ref: '#/components/schemas/GenerateCompletionResponse'
-  # /chat:
-  #   post:
-  #     operationId: generateChatCompletion
-  #     tags:
-  #       - Chat
-  #     summary: Generate the next message in a chat with a provided model.
-  #     description: This is a streaming endpoint, so there will be a series of responses. The final response object will include statistics and additional data from the request.
-  #     requestBody:
-  #       content:
-  #         application/json:
-  #           schema:
-  #             $ref: '#/components/schemas/GenerateChatCompletionRequest'
-  #     responses:
-  #       '200':
-  #         description: Successful operation.
-  #         content:
-  #           application/x-ndjson:
-  #             schema:
-  #               $ref: '#/components/schemas/GenerateChatCompletionResponse'
+  /generate:
+    post:
+      operationId: generateCompletion
+      tags:
+        - Completions
+      summary: Generate a response for a given prompt with a provided model.
+      description: The final response object will include statistics and additional data from the request.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateCompletionRequest'
+      responses:
+        '200':
+          description: Successful operation.
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/GenerateCompletionResponse'
+  /chat:
+    post:
+      operationId: generateChatCompletion
+      tags:
+        - Chat
+      summary: Generate the next message in a chat with a provided model.
+      description: This is a streaming endpoint, so there will be a series of responses. The final response object will include statistics and additional data from the request.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateChatCompletionRequest'
+      responses:
+        '200':
+          description: Successful operation.
+          content:
+            application/x-ndjson:
+              schema:
+                $ref: '#/components/schemas/GenerateChatCompletionResponse'
   /embeddings:
     post:
       operationId: generateEmbedding

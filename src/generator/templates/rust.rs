@@ -876,6 +876,21 @@ pub fn generate_clients(
 
             all_parameters.extend(body_parameters.clone());
             all_parameters.sort();
+            let mut return_type = path.response_name.clone();
+            let responses = build_responses(&path);
+            if responses.len() == 1 {
+                return_type = responses[0].data_type.clone();
+            } else {
+                responses
+                    .clone()
+                    .iter()
+                    .filter(|r| r.is2xx)
+                    .next()
+                    .iter()
+                    .for_each(|r| {
+                        return_type = r.data_type.clone();
+                    });
+            }
 
             let operation = Operation {
                 operation_id: id.to_owned(),
@@ -889,14 +904,14 @@ pub fn generate_clients(
                 form_parameters: vec![], //TODO: propagate forms that are missing in PathDefinition
                 is_multipart: false,     //TODO: propagate forms that are missing in PathDefinition
                 method: path.method.to_string(),
-                support_multiple_responses: path.response_entities.len() > 0,
+                support_multiple_responses: path.response_entities.len() > 1,
                 all_parameters,
                 path_parameters,
                 query_parameters,
                 body_parameters,
                 response_type: path.get_request_type().unwrap(),
-                return_type: path.response_name.clone(),
-                responses: build_responses(&path),
+                return_type,
+                responses,
                 use_bon_builder: config.rust.use_bon_builder,
                 group_parameters: config.rust.group_parameters,
                 with_aws_v4_signature: config.auth.with_aws_v4_signature,

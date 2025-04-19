@@ -118,7 +118,7 @@ pub struct {{ model.classname }} {
     {{ description }}{%- endif %}
     {%- if var.is_byte_array -%}
     {%- if var.required %}#[serde_as(as = "serde_with::base64::Base64")]{% else %}#[serde_as(as = "Option<serde_with::base64::Base64>")]{%- endif %}{%- endif %}
-    #[serde(rename = "{{ var.base_name }}"{% if !var.required %}{% if var.is_nullable %}, default, with = "::serde_with::rust::double_option"{% endif %}, skip_serializing_if = "Option::is_none"{% endif %}{% if var.required && var.is_nullable %}, deserialize_with = "Option::deserialize"{% endif %})]
+    #[serde(rename = "{{ var.base_name }}"{% if !var.required %}{% if var.is_nullable %}, default{% endif %}, skip_serializing_if = "Option::is_none"{% endif %}{% if var.required && var.is_nullable %}, deserialize_with = "Option::deserialize"{% endif %})]
     pub {{ var.name }}: {% if var.is_nullable || !var.required %}Option<{% endif %}{% if var.is_enum %}{% if var.is_array %}{% if var.unique_items %}std::collections::HashSet<{% else %}Vec<{% endif %}{% endif %}{% if let Some(enum_name)=var.enum_name %}{{ enum_name }}{% endif %}{% if var.is_array %}>{% endif %}{% else %}{% if var.is_model %}{% if !var.avoid_boxed_models %}Box<{% endif %}{{ var.data_type }}{% if !var.avoid_boxed_models %}>{% endif %}{% else %}{% if var.is_byte_array %}Vec<u8>{% else %}{{ var.data_type }}{% endif %}{% endif %}{% endif %}{% if var.is_nullable || !var.required %}>{% endif %},
 {%- endfor %}
 }
