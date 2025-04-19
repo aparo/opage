@@ -39,11 +39,6 @@ pub struct ConfigurationTemplateContext {
     pub with_aws_v4_signature: bool,
 }
 
-#[derive(Clone, Debug, Default)]
-struct VendorExtensions {
-    pub x_group_parameters: bool,
-}
-
 #[derive(Clone, Debug)]
 struct Response {
     pub code: String,
@@ -86,7 +81,6 @@ struct Operation {
     pub is_multipart: bool,
     pub response_type: TypeDefinition,
     pub return_type: String,
-    pub vendor_extensions: VendorExtensions,
     pub responses: Vec<Response>,
     pub auth_methods: Vec<AuthMethod>,
     // configuration
@@ -128,6 +122,28 @@ pub struct ApiTemplateContext {
     pub operations: Vec<Operation>,
     pub support_multiple_responses: bool,
     pub with_aws_v4_signature: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct ApiDescription {
+    pub class_filename: String,
+    pub classname: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct ApiInfo {
+    pub apis: Vec<ApiDescription>,
+}
+
+#[derive(Template)]
+#[template(path = "rust/api_mod.j2", escape = "none")]
+pub struct ApiModTemplate {
+    pub api_info: ApiInfo,
+    pub top_level_api_client: bool,
+    pub support_token_source: bool,
+    pub support_middleware: bool,
+    pub with_aws_v4_signature: bool,
+    pub mockall: bool,
 }
 
 #[derive(Template)]
@@ -805,6 +821,9 @@ pub fn generate_clients(
 
     let mut grouped_paths: Vec<_> = chunks.into_iter().collect();
 
+    // we called all the api info
+    let mut apis: Vec<ApiDescription> = vec![];
+
     grouped_paths.sort_by(|a, b| a.0.cmp(&b.0));
     // let group_number = grouped_paths.len();
 
@@ -877,7 +896,6 @@ pub fn generate_clients(
                 body_parameters,
                 response_type: path.get_request_type().unwrap(),
                 return_type: path.response_name.clone(),
-                vendor_extensions: VendorExtensions::default(),
                 responses: build_responses(&path),
                 use_bon_builder: config.rust.use_bon_builder,
                 group_parameters: config.rust.group_parameters,
@@ -890,16 +908,23 @@ pub fn generate_clients(
         // we add headers
         final_client_code.push_str(header);
         final_client_code.push_str("\n");
+        let classname = config.project_metadata.client_name.clone();
 
         // we add the client code
         let api_template = ApiTemplateContext {
-            classname: config.project_metadata.client_name.clone(),
+            classname: classname.clone(),
             mockall: config.rust.mockall,
             operations,
             support_multiple_responses: false,
             with_aws_v4_signature: config.auth.with_aws_v4_signature,
         };
         let mut path = namespace.replace(".", "/").replace("::", "/");
+        let filename = path.clone().split("/").last().unwrap().to_owned();
+        apis.push(ApiDescription {
+            class_filename: filename.clone(),
+            classname: classname.clone(),
+        });
+
         if path.is_empty() {
             path = "apis".to_owned();
         }
@@ -907,7 +932,7 @@ pub fn generate_clients(
         final_client_code.push_str(&api_template.render().unwrap());
         final_client_code.push_str("\n");
 
-        let full_path = target_dir.join(format!("{}.rs", path));
+        let full_path = target_dir.join(format!("apis/{}.rs", path));
         println!(
             "Writing to {} \n{}",
             full_path.to_str().unwrap(),
@@ -915,6 +940,32 @@ pub fn generate_clients(
         );
         write_filename(&full_path, &final_client_code)?;
     }
+
+    let mut top_level_api_client = false;
+    if apis.len() == 1 {
+        top_level_api_client = true;
+    }
+
+    // we create the mod file
+    let mut mod_file = String::new();
+    mod_file.push_str(header);
+    mod_file.push_str("\n");
+    let template = ApiModTemplate {
+        api_info: ApiInfo { apis },
+        top_level_api_client,
+        support_token_source: config.auth.support_token_source,
+        support_middleware: config.rust.support_middleware,
+        with_aws_v4_signature: config.auth.with_aws_v4_signature,
+        mockall: config.rust.mockall,
+    };
+    mod_file.push_str(&template.render().unwrap());
+    let api_mod_path = target_dir.join(format!("{}.rs", "apis/mod"));
+    println!(
+        "Writing to {} \n{}",
+        api_mod_path.to_str().unwrap(),
+        &mod_file
+    );
+    write_filename(&api_mod_path, &mod_file)?;
 
     Ok(())
 }
@@ -1227,7 +1278,7 @@ pub fn write_object_database(
             result.push_str(&header);
             result.push_str("\n");
             result.push_str(template.render().unwrap().as_str());
-            println!("Writing to {} \n{}", target_file.to_str().unwrap(), &result);
+            // println!("Writing to {} \n{}", target_file.to_str().unwrap(), &result);
             write_filename(&target_file, &result).unwrap();
             created_modules.push(module_name);
         }
@@ -1251,11 +1302,11 @@ pub fn write_object_database(
         // result.push_str("\n");
         // result.push_str(&types);
         write_filename(&target_file, &module_code).unwrap();
-        println!(
-            "Writing to {} \n{}",
-            target_file.to_str().unwrap(),
-            &module_code
-        );
+        // println!(
+        //     "Writing to {} \n{}",
+        //     target_file.to_str().unwrap(),
+        //     &module_code
+        // );
     }
 
     // let target_mod = target_dir.join("mod.rs");

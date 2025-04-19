@@ -85,6 +85,8 @@ pub struct RustConfig {
     pub group_parameters: bool,
     #[serde(default)]
     pub mockall: bool,
+    #[serde(default = "bool_true")]
+    pub support_middleware: bool,
 }
 impl Default for RustConfig {
     fn default() -> Self {
@@ -97,6 +99,7 @@ impl Default for RustConfig {
             use_bon_builder: true,
             group_parameters: true,
             mockall: false,
+            support_middleware: true,
         }
     }
 }
@@ -117,6 +120,8 @@ pub struct AuthConfig {
     pub api_key_in_header: bool,
     #[serde(default)]
     pub with_aws_v4_signature: bool,
+    #[serde(default)]
+    pub support_token_source: bool,
 }
 impl Default for AuthConfig {
     fn default() -> Self {
@@ -128,6 +133,7 @@ impl Default for AuthConfig {
             api_key_in_query: false,
             api_key_in_header: true,
             with_aws_v4_signature: false,
+            support_token_source: false,
         }
     }
 }

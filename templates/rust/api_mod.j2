@@ -1,8 +1,8 @@
 use std::error;
 use std::fmt;
-{% if with_aws_v4_signature %}
+{% if with_aws_v4_signature -%}
 use aws_sigv4;
-{% endif %}
+{%- endif %}
 
 #[derive(Debug, Clone)]
 pub struct ResponseContent<T> {
@@ -14,36 +14,36 @@ pub struct ResponseContent<T> {
 #[derive(Debug)]
 pub enum Error<T> {
     Reqwest(reqwest::Error),
-    {% if support_middleware %}
+    {%- if support_middleware %}
     ReqwestMiddleware(reqwest_middleware::Error),
-    {% endif %}
+    {%- endif %}
     Serde(serde_json::Error),
     Io(std::io::Error),
     ResponseError(ResponseContent<T>),
-    {% if with_aws_v4_signature %}
+    {%- if with_aws_v4_signature %}
     AWSV4SignatureError(aws_sigv4::http_request::Error),
-    {% endif %}
-    {% if support_token_source %}
+    {%- endif %}
+    {%- if support_token_source %}
     TokenSource(Box<dyn std::error::Error + Send + Sync>),
-    {% endif %}
+    {%- endif %}
 }
 
 impl<T> fmt::Display for Error<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (module, e) = match self {
             Error::Reqwest(e) => ("reqwest", e.to_string()),
-            {% if support_middleware %}
+            {% if support_middleware -%}
             Error::ReqwestMiddleware(e) => ("reqwest-middleware", e.to_string()),
-            {% endif %}
+            {%- endif %}
             Error::Serde(e) => ("serde", e.to_string()),
             Error::Io(e) => ("IO", e.to_string()),
             Error::ResponseError(e) => ("response", format!("status code {}", e.status)),
-            {% if with_aws_v4_signature %}
+            {%- if with_aws_v4_signature %}
             Error::AWSV4SignatureError(e) => ("aws v4 signature", e.to_string()),
-            {% endif %}
-            {% if support_token_source %}
+            {%- endif %}
+            {%- if support_token_source %}
             Error::TokenSource(e) => ("token source failure", e.to_string()),
-            {% endif %}
+            {%- endif %}
         };
         write!(f, "error in {}: {}", module, e)
     }
@@ -53,18 +53,18 @@ impl<T: fmt::Debug> error::Error for Error<T> {
     fn source(&self) -> Option<&(dyn error::Error + 'static)> {
         Some(match self {
             Error::Reqwest(e) => e,
-            {% if support_middleware %}
+            {% if support_middleware -%}
             Error::ReqwestMiddleware(e) => e,
-            {% endif %}
+            {%- endif %}
             Error::Serde(e) => e,
             Error::Io(e) => e,
             Error::ResponseError(_) => return None,
-            {% if with_aws_v4_signature %}
+            {%- if with_aws_v4_signature %}
             Error::AWSV4SignatureError(_) => return None,
-            {% endif %}
-            {% if support_token_source %}
+            {%- endif %}
+            {%- if support_token_source %}
             Error::TokenSource(e) => &**e,
-            {% endif %}
+            {%- endif %}
         })
     }
 }
@@ -149,87 +149,71 @@ impl From<&str> for ContentType {
     }
 }
 
-{% if api_info %}
-{% for api in api_info.apis %}
+{%- for api in api_info.apis %}
 pub mod {{ api.class_filename }};
-{% endfor %}
-{% endif %}
+{%- endfor %}
 
 pub mod configuration;
 
-{% if top_level_api_client %}
+{%- if top_level_api_client %}
 use std::sync::Arc;
 
 pub trait Api {
-    {% if api_info %}
-    {% for api in api_info.apis %}
+    {%- for api in api_info.apis %}
     fn {{ api.class_filename }}(&self) -> &dyn {{ api.class_filename }}::{{ api.classname }};
-    {% endfor %}
-    {% endif %}
+    {%- endfor %}
 }
 
 pub struct ApiClient {
-    {% if api_info %}
-    {% for api in api_info.apis %}
+    {%- for api in api_info.apis %}
     {{ api.class_filename }}: Box<dyn {{ api.class_filename }}::{{ api.classname }}>,
-    {% endfor %}
-    {% endif %}
+    {%- endfor %}
 }
 
 impl ApiClient {
     pub fn new(configuration: Arc<configuration::Configuration>) -> Self {
         Self {
-            {% if api_info %}
             {% for api in api_info.apis %}
             {{ api.class_filename }}: Box::new({{ api.class_filename }}::{{ api.classname }}Client::new(configuration.clone())),
             {% endfor %}
-            {% endif %}
         }
     }
 }
 
 impl Api for ApiClient {
-    {% if api_info %}
-    {% for api in api_info.apis %}
+    {%- for api in api_info.apis %}
     fn {{ api.class_filename }}(&self) -> &dyn {{ api.class_filename }}::{{ api.classname }} {
         self.{{ api.class_filename }}.as_ref()
     }
-    {% endfor %}
-    {% endif %}
+    {%- endfor %}
 }
 
-{% if mockall %}
+{% if mockall -%}
 #[cfg(feature = "mockall")]
 pub struct MockApiClient {
-    {% if api_info %}
-    {% for api in api_info.apis %}
+    {%- for api in api_info.apis %}
     pub {{ api.class_filename }}_mock: {{ api.class_filename }}::Mock{{ api.classname }},
-    {% endfor %}
-    {% endif %}
+    {%- endfor %}
 }
 
 #[cfg(feature = "mockall")]
 impl MockApiClient {
     pub fn new() -> Self {
         Self {
-            {% if api_info %}
-            {% for api in api_info.apis %}
+            {%- for api in api_info.apis %}
             {{ api.class_filename }}_mock: {{ api.class_filename }}::Mock{{ api.classname }}::new(),
-            {% endfor %}
-            {% endif %}
+            {%- endfor %}
         }
     }
 }
 
 #[cfg(feature = "mockall")]
 impl Api for MockApiClient {
-    {% if api_info %}
-    {% for api in api_info.apis %}
+    {%- for api in api_info.apis %}
     fn {{ api.class_filename }}(&self) -> &dyn {{ api.class_filename }}::{{ api.classname }} {
         &self.{{ api.class_filename }}_mock
     }
-    {% endfor %}
-    {% endif %}
+    {%- endfor %}
 }
-{% endif %}
-{% endif %}
+{%- endif %}
+{%- endif %}
