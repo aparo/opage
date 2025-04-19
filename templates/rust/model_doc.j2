@@ -1,0 +1,46 @@
+# {{ invoker_package }}\{{ classname }}{% if description %}
+
+{{ description }}{% endif %}
+
+All URIs are relative to *{{ base_path }}*
+
+Method | HTTP request | Description
+------------- | ------------- | -------------
+{% for operation in operations %}[**{{ operation.operation_id }}**]({{ classname }}.md#{{ operation.operation_id }}) | **{{ operation.http_method }}** {{ operation.path }} | {{ operation.summary }}
+{% endfor %}
+
+{% for operation in operations %}
+
+## {{ operation.operation_id }}
+
+> {% if operation.return_type %}{{ operation.return_type }} {% endif %}{{ operation.operation_id }}({% for param in operation.all_parameters %}{{ param.name }}{% if !loop.last %}, {% endif %}{% endfor %})
+{{ operation.summary }}{% if operation.notes %}
+
+{{ operation.notes }}{% endif %}
+
+### Parameters
+
+{% if !operation.all_parameters %}This endpoint does not need any parameter.{% else %}
+Name | Type | Description  | Required | Notes
+------------- | ------------- | ------------- | ------------- | -------------
+{% for param in operation.all_parameters %}
+**{{ param.name }}** | {% if !param.required %}Option<{% endif %}{% if param.required and param.is_nullable %}Option<{% endif %}{% if param.is_primitive_type %}**{{ param.data_type }}**{% else %}[**{{ param.data_type }}**]({{ param.base_type }}.md){% endif %}{% if !param.required %}>{% endif %}{% if param.required and param.is_nullable %}>{% endif %} | {{ param.description }} | {% if param.required %}[required]{% endif %} |{% if param.default_value %}[default to {{ param.default_value }}]{% endif %}
+{% endfor %}
+{% endif %}
+
+### Return type
+
+{% if operation.return_type %}{% if operation.return_typeIsPrimitive %}**{{ operation.return_type }}**{% else %}[**{{ operation.return_type }}**]({{ operation.return_base_type }}.md){% endif %}{% else %} (empty response body){% endif %}
+
+### Authorization
+
+{% if !operation.auth_methods %}No authorization required{% else %}{% for auth in operation.auth_methods %}[{{ auth.name }}](../README.md#{{ auth.name }}){% if !loop.last %}, {% endif %}{% endfor %}{% endif %}
+
+### HTTP request headers
+
+- **Content-Type**: {% if operation.consumes %}{% for consume in operation.consumes %}{{ consume.media_type }}{% if !loop.last %}, {% endif %}{% endfor %}{% else %}Not defined{% endif %}
+- **Accept**: {% if operation.produces %}{% for produce in operation.produces %}{{ produce.media_type }}{% if !loop.last %}, {% endif %}{% endfor %}{% else %}Not defined{% endif %}
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+{% endfor %}

@@ -11,5 +11,5 @@ pub struct {{ name }} {
 {%- if field.annotations.len()>0 %}
     {% for i in field.annotations %}{{ i }}{% endfor -%}
 {%- endif %}
-    {{ field.modifier }} {{ field.name }}: {{ field.typ }},{%- endfor %}
+    {{ field.modifier }} {{ field.name }}: {{ field.data_type }},{%- endfor %}
 }

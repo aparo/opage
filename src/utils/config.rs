@@ -12,6 +12,8 @@ pub struct ProjectMetadata {
     #[serde(default)]
     pub name: String,
     #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
     pub version: String,
     #[serde(default = "default_client_name")]
     pub client_name: String,
@@ -19,6 +21,8 @@ pub struct ProjectMetadata {
     pub user_agent: String,
     #[serde(default = "default_server_url")]
     pub server_url: String,
+    #[serde(default)]
+    pub info_email: Option<String>,
 }
 
 impl ProjectMetadata {
@@ -58,15 +62,13 @@ impl ProjectMetadata {
             client_name,
             user_agent,
             server_url: self.server_url.clone(),
+            ..self.clone()
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
-pub struct Config {
-    pub project_metadata: ProjectMetadata,
-    pub name_mapping: NameMapping,
-    pub ignore: SpecIgnore,
+pub struct RustConfig {
     #[serde(default = "bool_true")]
     pub serde_skip_null: bool,
     #[serde(default = "bool_true")]
@@ -77,6 +79,74 @@ pub struct Config {
     pub serde_serialize: bool,
     #[serde(default = "bool_true")]
     pub serde_deserialize: bool,
+    #[serde(default = "bool_true")]
+    pub use_bon_builder: bool,
+    #[serde(default = "bool_true")]
+    pub group_parameters: bool,
+    #[serde(default)]
+    pub mockall: bool,
+    #[serde(default = "bool_true")]
+    pub support_middleware: bool,
+}
+impl Default for RustConfig {
+    fn default() -> Self {
+        RustConfig {
+            serde_skip_null: true,
+            serde_skip_empty_vec: true,
+            serde_skip_empty_map: true,
+            serde_serialize: true,
+            serde_deserialize: true,
+            use_bon_builder: true,
+            group_parameters: true,
+            mockall: false,
+            support_middleware: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct AuthConfig {
+    #[serde(default = "bool_true")]
+    pub basic: bool,
+    #[serde(default = "bool_true")]
+    pub basic_bearer: bool,
+    #[serde(default = "bool_true")]
+    pub oauth: bool,
+    #[serde(default = "bool_true")]
+    pub api_key: bool,
+    #[serde(default)]
+    pub api_key_in_query: bool,
+    #[serde(default = "bool_true")]
+    pub api_key_in_header: bool,
+    #[serde(default)]
+    pub with_aws_v4_signature: bool,
+    #[serde(default)]
+    pub support_token_source: bool,
+}
+impl Default for AuthConfig {
+    fn default() -> Self {
+        AuthConfig {
+            basic: true,
+            basic_bearer: true,
+            oauth: true,
+            api_key: true,
+            api_key_in_query: false,
+            api_key_in_header: true,
+            with_aws_v4_signature: false,
+            support_token_source: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct Config {
+    pub project_metadata: ProjectMetadata,
+    pub name_mapping: NameMapping,
+    pub ignore: SpecIgnore,
+    #[serde(default)]
+    pub rust: RustConfig,
+    #[serde(default)]
+    pub auth: AuthConfig,
     #[serde(default = "default_language")]
     pub language: Language,
 }
@@ -99,11 +169,8 @@ impl Default for Config {
             project_metadata: ProjectMetadata::new(),
             name_mapping: NameMapping::new(),
             ignore: SpecIgnore::new(),
-            serde_skip_empty_map: true,
-            serde_skip_empty_vec: true,
-            serde_skip_null: true,
-            serde_serialize: true,
-            serde_deserialize: true,
+            rust: RustConfig::default(),
+            auth: AuthConfig::default(),
             language: default_language(),
         }
     }

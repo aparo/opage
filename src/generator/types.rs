@@ -1,7 +1,5 @@
-use crate::generator::templates::rust::{Field, RustEnumTemplate, RustStructTemplate};
 use crate::utils::config::Config;
 use crate::GeneratorError;
-use askama::Template;
 use dashmap::DashMap;
 use std::collections::HashMap;
 
@@ -62,6 +60,22 @@ pub struct PropertyDefinition {
     pub required: bool,
     pub description: Option<String>,
     pub example: Option<serde_json::Value>,
+}
+
+impl PropertyDefinition {
+    pub fn is_array(&self) -> bool {
+        self.type_name.starts_with("Vec<")
+    }
+
+    pub fn is_byte_array(&self) -> bool {
+        self.type_name.starts_with("Vec<u8>")
+    }
+    pub fn is_map(&self) -> bool {
+        self.type_name.starts_with("HashMap<") || self.type_name.starts_with("BTreeMap<")
+    }
+    pub fn is_file(&self) -> bool {
+        self.type_name.starts_with("PathBuf") || self.type_name.starts_with("Option<PathBuf")
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -265,6 +279,7 @@ pub struct PathDefinition {
     pub response_entities: ResponseEntities,
     pub path_parameters: PathParameters,
     pub query_parameters: QueryParameters,
+    // TODO: check header parameters
 }
 
 impl Default for PathDefinition {

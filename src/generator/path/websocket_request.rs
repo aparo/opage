@@ -1,6 +1,4 @@
-use super::utils::{
-    generate_request_body, generate_request_body_entity, generate_responses, is_path_parameter,
-};
+use super::utils::{generate_request_body_entity, generate_responses, is_path_parameter};
 use crate::{
     generator::component::{
         object_definition::oas3_type_to_string, type_definition::get_type_from_schema,
@@ -61,7 +59,7 @@ pub fn generate_operation(
     path: &str,
     operation: &Operation,
     object_database: &ObjectDatabase,
-    path_database: &PathDatabase,
+    _path_database: &PathDatabase,
     config: &crate::utils::config::Config,
 ) -> Result<String, GeneratorError> {
     let operation_definition_path: Vec<String> = vec![path.to_owned()];
