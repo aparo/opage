@@ -1,0 +1,4 @@
+{% for model in models %}
+pub mod {{ model.class_filename }};
+pub use self::{{ model.class_filename }}::{{ model.classname }};
+{% endfor %}
