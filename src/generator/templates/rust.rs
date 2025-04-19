@@ -5,12 +5,13 @@ use crate::generator::types::{
 };
 use crate::utils::config::Config;
 use crate::utils::file::write_filename;
-use crate::utils::name_mapping::{convert_name, fix_struct_names};
+use crate::utils::name_mapping::convert_name;
 use crate::utils::string::capitalize;
 use crate::GeneratorError;
 use askama::Template;
 use convert_case::Casing;
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -143,6 +144,92 @@ pub struct RustEnumTemplate<'a> {
     pub variants: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Model {
+    pub classname: String,
+    pub description: Option<String>,
+    pub is_enum: bool,
+    pub is_integer: bool,
+    pub rust_has_byte_array: bool,
+    pub property_base_name: Option<String>,
+    pub one_of: Vec<ComposedSchema>,
+    pub mapped_models: Vec<MappedModel>,
+    pub vars: Vec<Variable>,
+    pub allowable_values: AllowableValues,
+    pub composed_schemas: ComposedSchemas,
+}
+
+impl Model {
+    pub fn discriminator(&self) -> bool {
+        self.property_base_name.is_some()
+    }
+    pub fn required_vars(&self) -> Vec<Variable> {
+        self.vars
+            .iter()
+            .filter(|v| v.required)
+            .cloned()
+            .collect::<Vec<_>>()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AllowableValues {
+    pub enum_vars: Vec<EnumVar>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnumVar {
+    pub name: String,
+    pub value: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComposedSchemas {
+    pub one_of: Vec<ComposedSchema>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComposedSchema {
+    pub name: String,
+    pub base_name: String,
+    pub description: Option<String>,
+    pub data_type: String,
+    pub is_model: bool,
+    pub avoid_boxed_models: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MappedModel {
+    pub model_name: String,
+    pub mapping_name: String,
+    pub vars: Vec<Variable>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Variable {
+    pub name: String,
+    pub base_name: String,
+    pub description: Option<String>,
+    pub required: bool,
+    pub is_nullable: bool,
+    pub is_enum: bool,
+    pub is_model: bool,
+    pub is_byte_array: bool,
+    pub is_array: bool,
+    pub unique_items: bool,
+    pub enum_name: Option<String>,
+    pub data_type: String,
+    pub avoid_boxed_models: bool,
+    pub allowable_values: AllowableValues,
+    pub mapped_models: Vec<MappedModel>,
+}
+
+#[derive(Template)]
+#[template(path = "rust/model.j2", escape = "none")]
+pub struct RustModelTemplate {
+    pub models: Vec<Model>,
+}
+
 #[derive(Template)]
 #[template(path = "rust/type.j2", escape = "none")]
 pub struct RustTypeTemplate<'a> {
@@ -268,6 +355,13 @@ pub struct CargoTemplate<'a> {
 //     }
 // }
 
+#[derive(Template)]
+#[template(path = "rust/lib.j2", escape = "none")]
+pub struct ProjectLibTemplateContext {
+    pub hyper: bool,
+    pub reqwest: bool,
+}
+
 pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<(), GeneratorError> {
     let header = &render_partial_header(config);
     // producing Cargo.toml
@@ -287,13 +381,25 @@ pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<()
 
     write_filename(&cargo_target_file, &template)?;
 
+    // producing lib.rs
+    let target_file = output_dir.join("src").join("lib.rs");
+
+    let template = ProjectLibTemplateContext {
+        reqwest: true,
+        hyper: false,
+    }
+    .render()
+    .unwrap();
+
+    write_filename(&target_file, &template)?;
+
     // producing .gitignore
     let git_ignore_file = output_dir.join(".gitignore");
     let template = RustGitIgnoreTemplate {}.render().unwrap();
     write_filename(&git_ignore_file, &template)?;
 
     // producing src/api/configuration.rs
-    let configuration_file = output_dir.join("src").join("api").join("configuration.rs");
+    let configuration_file = output_dir.join("src").join("apis").join("configuration.rs");
     let mut configuration_content = String::new();
     configuration_content.push_str(header);
     let configuration_template = ConfigurationTemplateContext {
@@ -307,25 +413,25 @@ pub fn populate_client_files(output_dir: &PathBuf, config: &Config) -> Result<()
     write_filename(&configuration_file, &configuration_content)?;
 
     // producing other files
-    let files = vec![
-        (
-            embed_file::embed_string!("embedded/rust/auth_middleware.rs"),
-            "src/auth_middleware.rs",
-        ),
-        (
-            embed_file::embed_string!("embedded/rust/credentials.rs"),
-            "src/credentials.rs",
-        ),
-        (
-            embed_file::embed_string!("embedded/rust/client.rs"),
-            "src/client.rs",
-        ),
-    ];
+    // let files = vec![
+    //     (
+    //         embed_file::embed_string!("embedded/rust/auth_middleware.rs"),
+    //         "src/auth_middleware.rs",
+    //     ),
+    //     (
+    //         embed_file::embed_string!("embedded/rust/credentials.rs"),
+    //         "src/credentials.rs",
+    //     ),
+    //     (
+    //         embed_file::embed_string!("embedded/rust/client.rs"),
+    //         "src/client.rs",
+    //     ),
+    // ];
 
-    for (content, file_name) in files {
-        let target_file = output_dir.join(file_name);
-        write_filename(&target_file, &content)?;
-    }
+    // for (content, file_name) in files {
+    //     let target_file = output_dir.join(file_name);
+    //     write_filename(&target_file, &content)?;
+    // }
 
     Ok(())
 }
@@ -787,7 +893,7 @@ pub fn generate_clients(
         };
         let mut path = namespace.replace(".", "/").replace("::", "/");
         if path.is_empty() {
-            path = "lib".to_owned();
+            path = "apis".to_owned();
         }
 
         final_client_code.push_str(&api_template.render().unwrap());
@@ -934,65 +1040,120 @@ pub fn write_object_database(
     for (namespace, group) in grouped_objects {
         let mut type_map: HashMap<String, (Vec<String>, Vec<String>)> =
             std::collections::HashMap::new();
-        let mut mods_map: HashMap<String, Vec<String>> = HashMap::new();
+        // let mut mods_map: HashMap<String, Vec<String>> = HashMap::new();
 
         let mut items = group.map(|f| f.clone()).collect::<Vec<_>>();
         items.sort_by(|a, b| a.name().cmp(&b.name()));
 
         let target_file = target_dir.join(format!(
-            "{}.rs",
+            "{}",
             namespace.replace(".", "/").replace("::", "/")
         ));
-        let mut struct_codes = String::new();
-        let mut all_imports = HashSet::new();
+        let mut created_modules = vec![];
+
         for object_definition in items.iter() {
+            let mut all_imports = HashSet::new();
             let object_name = get_object_name(object_definition);
 
             let module_name = name_mapping.name_to_module_name(&object_name);
 
             let namespace = extract_rust_namespace(&module_name);
+            let mut models: Vec<Model> = vec![];
 
             match object_definition {
                 ObjectDefinition::Struct(struct_definition) => {
                     for module in struct_definition.get_required_modules() {
                         all_imports.insert(module.to_use());
                     }
-
-                    let mut result = String::new();
-                    result.push_str("\n");
-                    result.push_str(&struct_definition.to_string(true, config)?);
-                    struct_codes.push_str(&result);
-                    // write_filename(&target_file, &result).unwrap();
-                    let mut mods = vec![];
-                    if mods_map.contains_key(&namespace) {
-                        mods = mods_map.get(&namespace).unwrap().clone();
-                    }
-                    mods.push(format!(
-                        "pub mod {};",
-                        &target_file.file_stem().unwrap().to_str().unwrap()
-                    ));
-                    mods_map.insert(namespace, mods);
+                    let model = Model {
+                        classname: struct_definition.name.clone(),
+                        description: struct_definition.description.clone(),
+                        is_enum: false,
+                        is_integer: false,
+                        rust_has_byte_array: struct_definition
+                            .properties
+                            .values()
+                            .any(|prop| prop.is_byte_array()),
+                        property_base_name: None,
+                        one_of: vec![],
+                        mapped_models: vec![],
+                        vars: struct_definition
+                            .clone()
+                            .properties
+                            .into_iter()
+                            .map(|(_, prop)| Variable {
+                                name: prop.name.clone(),
+                                base_name: prop.real_name.clone(),
+                                description: prop.description.clone(),
+                                required: prop.required,
+                                is_nullable: !prop.required,
+                                is_enum: false,
+                                is_model: false,
+                                is_byte_array: prop.is_byte_array(),
+                                is_array: prop.is_array(),
+                                unique_items: false,
+                                enum_name: None,
+                                data_type: prop.type_name.clone(),
+                                avoid_boxed_models: false,
+                                allowable_values: AllowableValues { enum_vars: vec![] },
+                                mapped_models: vec![],
+                            })
+                            .collect(),
+                        allowable_values: AllowableValues { enum_vars: vec![] },
+                        composed_schemas: ComposedSchemas { one_of: vec![] },
+                    };
+                    models.push(model);
                 }
                 ObjectDefinition::Enum(enum_definition) => {
                     for module in enum_definition.get_required_modules() {
                         all_imports.insert(module.to_use());
                     }
 
-                    let mut result = String::new();
-                    result.push_str("\n");
-                    result.push_str(&enum_definition.to_string(true, config)?);
-                    struct_codes.push_str(&result);
-                    // write_filename(&target_file, &result).unwrap();
-                    // we update the mods list
-                    let mut mods = vec![];
-                    if mods_map.contains_key(&namespace) {
-                        mods = mods_map.get(&namespace).unwrap().clone();
-                    }
-                    mods.push(format!(
-                        "pub mod {};",
-                        &target_file.file_stem().unwrap().to_str().unwrap()
-                    ));
-                    mods_map.insert(namespace, mods);
+                    let model = Model {
+                        classname: enum_definition.name.clone(),
+                        description: enum_definition.description.clone(),
+                        is_enum: true,
+                        is_integer: false,
+                        rust_has_byte_array: false,
+                        property_base_name: None,
+                        one_of: vec![],
+                        mapped_models: vec![],
+                        vars: enum_definition
+                            .clone()
+                            .values
+                            .into_iter()
+                            .map(|(name, enum_value)| Variable {
+                                name: name.clone(),
+                                base_name: name.clone(),
+                                description: None,
+                                required: true,
+                                is_nullable: false,
+                                is_enum: true,
+                                is_model: false,
+                                is_byte_array: false,
+                                is_array: false,
+                                unique_items: false,
+                                enum_name: Some(enum_definition.name.clone()),
+                                data_type: enum_value.value_type.name.clone(),
+                                avoid_boxed_models: false,
+                                allowable_values: AllowableValues { enum_vars: vec![] },
+                                mapped_models: vec![],
+                            })
+                            .collect(),
+                        allowable_values: AllowableValues {
+                            enum_vars: enum_definition
+                                .clone()
+                                .values
+                                .into_iter()
+                                .map(|(name, enum_value)| EnumVar {
+                                    name: name.clone(),
+                                    value: enum_value.value_type.name.parse().unwrap_or_default(),
+                                })
+                                .collect(),
+                        },
+                        composed_schemas: ComposedSchemas { one_of: vec![] },
+                    };
+                    models.push(model);
                 }
                 ObjectDefinition::Primitive(primitive_definition) => {
                     let mut imports = vec![];
@@ -1028,49 +1189,42 @@ pub fn write_object_database(
                     type_map.insert(namespace, (imports, codes));
                 }
             }
-        }
 
-        let mut created_modules = vec![];
+            let target_file = target_dir.join(format!(
+                "{}/{}.rs",
+                module_name.replace("::", "/"),
+                &object_name
+            ));
 
-        for (module_name, mods) in mods_map.iter() {
-            let mut mods = mods.clone();
-            let target_file = target_dir.join(format!("{}/mod.rs", module_name.replace("::", "/")));
-            mods.sort();
-            let mut result = mods.join("\n");
-
-            if type_map.contains_key(module_name) {
-                let (imports, codes) = type_map.get(module_name).unwrap();
-                let mut imports = imports.clone();
-                imports.sort();
-                result.push_str("\n");
-                result.push_str(&imports.join("\n"));
-                result.push_str("\n");
-                result.push_str(&codes.join("\n"));
-            }
+            // let mods = all_imports.iter().cloned().collect::<Vec<String>>();
+            // mods.sort();
+            let mut result = String::new();
+            let template = RustModelTemplate { models };
+            result.push_str("\n");
+            result.push_str(template.render().unwrap().as_str());
 
             write_filename(&target_file, &result).unwrap();
             created_modules.push(module_name);
         }
 
-        let mut types = String::new();
-        for (module_name, (imports, codes)) in type_map.iter() {
-            if created_modules.contains(&module_name) {
-                continue;
-            }
-            for import in imports {
-                all_imports.insert(import.clone());
-            }
-            // let target_file = target_dir.join(format!("{}/mod.rs", module_name.replace("::", "/")));
-            types.push_str(&codes.join("\n"));
-            created_modules.push(module_name);
-        }
-        let mut imports = all_imports.iter().cloned().collect::<Vec<String>>();
-        imports.sort();
-        let mut result = imports.join("\n");
-        result.push_str("\n");
-        result.push_str(&types);
-        result.push_str(&struct_codes);
-        write_filename(&target_file, &result).unwrap();
+        // let mut types = String::new();
+        // for (module_name, (imports, codes)) in type_map.clone().iter() {
+        //     if created_modules.contains(&module_name) {
+        //         continue;
+        //     }
+        //     for import in imports {
+        //         all_imports.insert(import.clone());
+        //     }
+        //     // let target_file = target_dir.join(format!("{}/mod.rs", module_name.replace("::", "/")));
+        //     types.push_str(&codes.join("\n"));
+        //     created_modules.push(module_name);
+        // }
+        // let mut imports = all_imports.iter().cloned().collect::<Vec<String>>();
+        // imports.sort();
+        // let mut result = imports.join("\n");
+        // result.push_str("\n");
+        // result.push_str(&types);
+        // write_filename(&target_file, &result).unwrap();
         // println!("Writing to {} \n{}", target_file.to_str().unwrap(), &result);
     }
 

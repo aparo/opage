@@ -1,106 +1,107 @@
 [package]
 name = "{{ package_name }}"
-{% if let Some(package_version) = package_version %}
+{%- if let Some(package_version) = package_version %}
 version = "{{ package_version }}"
-{% else %}
+{%- else %}
 version = "0.0.0"
-{% endif %}
-{% if let Some(info_email) = info_email %}
+{%- endif %}
+{%- if let Some(info_email) = info_email %}
 authors = ["{{ info_email }}"]
-{% else %}
+{%- else %}
 authors = ["OpenAPI Generator team and contributors"]
-{% endif %}
-{% if let Some(app_description) = app_description %}
+{%- endif %}
+{%- if let Some(app_description) = app_description %}
 description = "{{ app_description }}"
-{% endif %}
-{% if let Some(license_info) = license_info %}
+{%- endif %}
+{%- if let Some(license_info) = license_info %}
 license = "{{ license_info }}"
-{% else %}
+{%- else %}
 # Override this license by providing a License Object in the OpenAPI.
 license = "Unlicense"
-{% endif %}
+{%- endif %}
 edition = "2021"
-{% if let Some(publish_rust_registry) = publish_rust_registry %}
+{%- if let Some(publish_rust_registry) = publish_rust_registry %}
 publish = ["{{ publish_rust_registry }}"]
-{% endif %}
-{% if let Some(repository_url) = repository_url %}
+{%- endif %}
+{%- if let Some(repository_url) = repository_url %}
 repository = "{{ repository_url }}"
-{% endif %}
-{% if let Some(documentation_url) = documentation_url %}
+{%- endif %}
+{%- if let Some(documentation_url) = documentation_url %}
 documentation = "{{ documentation_url }}"
-{% endif %}
-{% if let Some(home_page_url) = home_page_url %}
+{%- endif %}
+{%- if let Some(home_page_url) = home_page_url %}
 homepage = "{{ home_page_url }}"
-{% endif %}
+{%- endif %}
 
 [dependencies]
 serde = { version = "^1.0", features = ["derive"] }
-{% if serde_with %}
+{%- if serde_with %}
 serde_with = { version = "^3.8", default-features = false, features = ["base64", "std", "macros"] }
-{% endif %}
+{%- endif %}
 serde_json = "^1.0"
 serde_repr = "^0.1"
 url = "^2.5"
-{% if has_uuids %}
+{%- if has_uuids %}
 uuid = { version = "^1.8", features = ["serde", "v4"] }
-{% endif %}
-{% if hyper %}
-{% if hyper0x %}
+{%- endif %}
+{%- if hyper %}
+{%- if hyper0x %}
 hyper = { version = "~0.14", features = ["full"] }
 hyper-tls = "~0.5"
-{% else %}
+{%- else %}
 hyper = { version = "^1.3.1", features = ["full"] }
 hyper-util = { version = "0.1.5", features = ["client", "client-legacy", "http1", "http2"] }
 http-body-util = { version = "0.1.2" }
-{% endif %}
+{%- endif %}
 http = "~0.2"
 base64 = "~0.7.0"
 futures = "^0.3"
-{% endif %}
-{% if with_aws_v4_signature %}
+{%- endif %}
+{%- if with_aws_v4_signature %}
 aws-sigv4 = "0.3.0"
 http = "0.2.5"
 secrecy = "0.8.0"
-{% endif %}
-{% if reqwest %}
-{% if !support_async %}
+{%- endif %}
+{%- if reqwest %}
+{%- if !support_async %}
 reqwest = { version = "^0.12", features = ["json", "blocking", "multipart"] }
-{% if support_middleware %}
+{%- if support_middleware %}
 reqwest-middleware = { version = "^0.4", features = ["json", "blocking", "multipart"] }
-{% endif %}
-{% else %}
+{%- endif %}
+{%- else %}
 reqwest = { version = "^0.12", features = ["json", "multipart"] }
-{% if support_middleware %}
+{%- if support_middleware %}
 reqwest-middleware = { version = "^0.4", features = ["json", "multipart"] }
-{% endif %}
-{% if support_token_source %}
+{%- endif %}
+{%- if support_token_source %}
 async-trait = "^0.1"
 # TODO: propose to Yoshidan to externalize this as non google related crate, so that it can easily be extended for other cloud providers.
 google-cloud-token = "^0.1"
-{% endif %}
-{% endif %}
-{% endif %}
-{% if reqwest_trait %}
+{%- endif %}
+{%- endif %}
+{%- endif %}
+{%- if reqwest_trait %}
 async-trait = "^0.1"
 reqwest = { version = "^0.12", features = ["json", "multipart"] }
-{% if support_middleware %}
+{%- if support_middleware %}
 reqwest-middleware = { version = "^0.4", features = ["json", "multipart"] }
-{% endif %}
-{% if support_token_source %}
+{%- endif %}
+{%- if support_token_source %}
 # TODO: propose to Yoshidan to externalize this as non google related crate, so that it can easily be extended for other cloud providers.
 google-cloud-token = "^0.1"
-{% endif %}
-{% if mockall %}
+{%- endif %}
+{%- if mockall %}
 mockall = { version = "^0.13", optional = true }
-{% endif %}
-{% if use_bon_builder %}
-bon = { version = "2.3", optional = true }
-{% endif %}
+{%- endif %}
+{%- if use_bon_builder %}
+bon = { version = "3.5", optional = true }
+{%- endif %}
+
 [features]
-{% if mockall %}
+{%- if mockall %}
 mockall = ["dep:mockall"]
-{% endif %}
-{% if use_bon_builder %}
+{%- endif %}
+{%- if use_bon_builder %}
 bon = ["dep:bon"]
-{% endif %}
-{% endif %}
+{%- endif %}
+{%- endif %}

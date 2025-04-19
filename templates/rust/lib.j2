@@ -5,13 +5,13 @@ extern crate serde_repr;
 extern crate serde;
 extern crate serde_json;
 extern crate url;
-{% if hyper %}
+{%- if hyper %}
 extern crate hyper;
 extern crate futures;
-{% endif %}
-{% if reqwest %}
+{%- endif %}
+{%- if reqwest %}
 extern crate reqwest;
-{% endif %}
+{%- endif %}
 
 pub mod apis;
 pub mod models;

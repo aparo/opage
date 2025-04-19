@@ -66,6 +66,10 @@ impl PropertyDefinition {
     pub fn is_array(&self) -> bool {
         self.type_name.starts_with("Vec<")
     }
+
+    pub fn is_byte_array(&self) -> bool {
+        self.type_name.starts_with("Vec<u8>")
+    }
     pub fn is_map(&self) -> bool {
         self.type_name.starts_with("HashMap<") || self.type_name.starts_with("BTreeMap<")
     }
