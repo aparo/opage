@@ -25,7 +25,7 @@ pub trait {{ classname }}: Send + Sync {
     {% if operation.group_parameters -%}
     async fn {{ operation.operation_id }}(&self, params: {{ operation.operation_id_camel_case }}Params) -> Result<{% if operation.support_multiple_responses %}ResponseContent<{{ operation.operation_id_camel_case }}Success{% endif %}{% if operation.support_multiple_responses %}>{% endif %}{% if !operation.support_multiple_responses %}{{ operation.return_type }}{% endif %}, Error<{{ operation.operation_id_camel_case }}Error>>;
     {%- else -%}
-    async fn {{ operation.operation_id }}(&self, {% for param in operation.all_parameters %}{{ param.name }}: {% if !param.required %}Option<{% endif %}{% if param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable %}>{% endif %}{% if !param.required %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}) -> Result<{% if operation.support_multiple_responses %}ResponseContent<{% endif%}{{ operation.operation_id_camel_case }}Success{% if operation.support_multiple_responses %}{{ ">" }}{% endif%}{% if !operation.support_multiple_responses %}{{ operation.return_type }}{% endif%}, Error<{{ operation.operation_id_camel_case }}Error>>;
+    async fn {{ operation.operation_id }}(&self, {% for param in operation.all_parameters %}{{ param.name|fix_member_name}}: {% if !param.required %}Option<{% endif %}{% if param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable %}>{% endif %}{% if !param.required %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}) -> Result<{% if operation.support_multiple_responses %}ResponseContent<{% endif%}{{ operation.operation_id_camel_case }}Success{% if operation.support_multiple_responses %}{{ ">" }}{% endif%}{% if !operation.support_multiple_responses %}{{ operation.return_type }}{% endif%}, Error<{{ operation.operation_id_camel_case }}Error>>;
     {%- endif -%}
 {% endfor %}
 }
@@ -50,7 +50,7 @@ impl {{ classname }}Client {
 pub struct {{ operation.operation_id_camel_case }}Params {
     {%- for param in operation.all_parameters %}
     {{ param.description }}
-    pub {{ param.name }}: {% if !param.required || param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable || !param.required %}>{% endif %},
+    pub {{ param.name|fix_member_name}}: {% if !param.required || param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable || !param.required %}>{% endif %},
     {%- endfor %}
 }
 {%- endif -%}
@@ -70,17 +70,17 @@ impl {{ classname }} for {{ classname }}Client {
     async fn {{ operation.operation_id }}(&self, params: {{ operation.operation_id_camel_case }}Params) -> Result<{% if operation.support_multiple_responses %}ResponseContent<{{ operation.operation_id_camel_case }}Success>{% else %}{{ operation.return_type }}{% endif %}, Error<{{ operation.operation_id_camel_case }}Error>> {
         let {{ operation.operation_id_camel_case }}Params {
             {%- for param in operation.all_parameters %}
-            {{ param.name }},
+            {{ param.name|fix_member_name}},
             {%- endfor %}
         } = params;
     {% else %}
-    async fn {{ operation.operation_id }}(&self, {% for param in operation.all_parameters %}{{ param.name }}: {% if !param.required %}Option<{% endif %}{% if param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable %}>{% endif %}{% if !param.required %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}) -> Result<{% if operation.support_multiple_responses %}ResponseContent<{{ operation.operation_id_camel_case }}Success>{% else %}{{ operation.return_type }}{% endif %}, Error<{{ operation.operation_id_camel_case }}Error>> {
+    async fn {{ operation.operation_id }}(&self, {% for param in operation.all_parameters %}{{ param.name|fix_member_name}}: {% if !param.required %}Option<{% endif %}{% if param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable %}>{% endif %}{% if !param.required %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}) -> Result<{% if operation.support_multiple_responses %}ResponseContent<{{ operation.operation_id_camel_case }}Success>{% else %}{{ operation.return_type }}{% endif %}, Error<{{ operation.operation_id_camel_case }}Error>> {
     {% endif %}
         let local_var_configuration = &self.configuration;
 
         let local_var_client = &local_var_configuration.client;
 
-        let local_var_uri_str = format!("{}{{ operation.path }}", local_var_configuration.base_path{% for param in operation.path_parameters %}, {{ param.name }}={{ param.name | urlencode }}{% endfor %});
+        let local_var_uri_str = format!("{}{{ operation.path }}", local_var_configuration.base_path{% for param in operation.path_parameters %}, {{ param.name|fix_member_name}}={{ param.name|fix_member_name| urlencode }}{% endfor %});
         let mut local_var_req_builder = local_var_client.request(reqwest::Method::{{ operation.http_method }}, local_var_uri_str.as_str());
 
 {% for query_param in operation.query_parameters -%}

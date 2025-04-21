@@ -75,7 +75,7 @@ pub enum {{ model.classname }} {
     {% for var in mapped_model.vars %}
         {% if let Some(description)=var.description %}{{ description }}{% endif %}
         #[serde(rename = "{{ var.base_name }}"{% if !var.required %}, skip_serializing_if = "Option::is_none"{% endif %})]
-        {{ var.name }}: {% if !var.required %}Option<{% endif %}{% if var.is_enum %}{% if let Some(enum_name)=var.enum_name %}{{ enum_name }}{% endif %}{% else %}{% if var.is_model %}{% if !var.avoid_boxed_models %}Box<{% endif %}{{ var.data_type }}{% if !var.avoid_boxed_models %}>{% endif %}{% else %}{{ var.data_type }}{% endif %}{% endif %}{% if !var.required %}>{% endif %},
+        {{ var.name|fix_member_name}}: {% if !var.required %}Option<{% endif %}{% if var.is_enum %}{% if let Some(enum_name)=var.enum_name %}{{ enum_name }}{% endif %}{% else %}{% if var.is_model %}{% if !var.avoid_boxed_models %}Box<{% endif %}{{ var.data_type }}{% if !var.avoid_boxed_models %}>{% endif %}{% else %}{{ var.data_type }}{% endif %}{% endif %}{% if !var.required %}>{% endif %},
     {%- endfor %}
     },
     {%- endfor %}
@@ -95,7 +95,7 @@ impl Default for {{ model.classname }} {
         {% for mapped_model in model.mapped_models.iter().take(1) %}
         Self::{{ mapped_model.model_name }} {
         {% for var in mapped_model.vars %}
-            {{ var.name }}: Default::default(),
+            {{ var.name|fix_member_name}}: Default::default(),
         {%- endfor %}
         }
         {%- endfor %}
@@ -119,16 +119,16 @@ pub struct {{ model.classname }} {
     {%- if var.is_byte_array -%}
     {%- if var.required %}#[serde_as(as = "serde_with::base64::Base64")]{% else %}#[serde_as(as = "Option<serde_with::base64::Base64>")]{%- endif %}{%- endif %}
     #[serde(rename = "{{ var.base_name }}"{% if !var.required %}{% if var.is_nullable %}, default{% endif %}, skip_serializing_if = "Option::is_none"{% endif %}{% if var.required && var.is_nullable %}, deserialize_with = "Option::deserialize"{% endif %})]
-    pub {{ var.name }}: {% if var.is_nullable || !var.required %}Option<{% endif %}{% if var.is_enum %}{% if var.is_array %}{% if var.unique_items %}std::collections::HashSet<{% else %}Vec<{% endif %}{% endif %}{% if let Some(enum_name)=var.enum_name %}{{ enum_name }}{% endif %}{% if var.is_array %}>{% endif %}{% else %}{% if var.is_model %}{% if !var.avoid_boxed_models %}Box<{% endif %}{{ var.data_type }}{% if !var.avoid_boxed_models %}>{% endif %}{% else %}{% if var.is_byte_array %}Vec<u8>{% else %}{{ var.data_type }}{% endif %}{% endif %}{% endif %}{% if var.is_nullable || !var.required %}>{% endif %},
+    pub {{ var.name|fix_member_name}}: {% if var.is_nullable || !var.required %}Option<{% endif %}{% if var.is_enum %}{% if var.is_array %}{% if var.unique_items %}std::collections::HashSet<{% else %}Vec<{% endif %}{% endif %}{% if let Some(enum_name)=var.enum_name %}{{ enum_name }}{% endif %}{% if var.is_array %}>{% endif %}{% else %}{% if var.is_model %}{% if !var.avoid_boxed_models %}Box<{% endif %}{{ var.data_type }}{% if !var.avoid_boxed_models %}>{% endif %}{% else %}{% if var.is_byte_array %}Vec<u8>{% else %}{{ var.data_type }}{% endif %}{% endif %}{% endif %}{% if var.is_nullable || !var.required %}>{% endif %},
 {%- endfor %}
 }
 
 impl {{ model.classname }} {
     {% if let Some(description)=model.description %}{{ description }}{% endif %}
-    pub fn new({% for var in model.required_vars() %}{{ var.name }}: {% if var.is_nullable %}Option<{% endif %}{% if var.is_enum %}{% if var.is_array %}{% if var.unique_items %}std::collections::HashSet<{% else %}Vec<{% endif %}{% endif %}{% if let Some(enum_name)=var.enum_name %}{{ enum_name }}{% endif %}{% if var.is_array %}>{% endif %}{% else %}{% if var.is_byte_array %}Vec<u8>{% else %}{{ var.data_type }}{% endif %}{% endif %}{% if var.is_nullable %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}) -> {{ model.classname }} {
+    pub fn new({% for var in model.required_vars() %}{{ var.name|fix_member_name}}: {% if var.is_nullable %}Option<{% endif %}{% if var.is_enum %}{% if var.is_array %}{% if var.unique_items %}std::collections::HashSet<{% else %}Vec<{% endif %}{% endif %}{% if let Some(enum_name)=var.enum_name %}{{ enum_name }}{% endif %}{% if var.is_array %}>{% endif %}{% else %}{% if var.is_byte_array %}Vec<u8>{% else %}{{ var.data_type }}{% endif %}{% endif %}{% if var.is_nullable %}>{% endif %}{% if !loop.last %}, {% endif %}{% endfor %}) -> {{ model.classname }} {
         {{ model.classname }} {
             {%- for var in model.vars %}
-            {{ var.name }}{% if !var.required %}: None{% else %}{% if var.is_model %}{% if !var.avoid_boxed_models %}: {% if !var.is_nullable %}Box::new({{ var.name }}){% else %}if let Some(x) = {{ var.name }} { Some(Box::new(x)) } else { None }{% endif %}{% endif %}{% endif %}{% endif %},
+            {{ var.name|fix_member_name}}{% if !var.required %}: None{% else %}{% if var.is_model %}{% if !var.avoid_boxed_models %}: {% if !var.is_nullable %}Box::new({{ var.name|fix_member_name}}){% else %}if let Some(x) = {{ var.name|fix_member_name}} { Some(Box::new(x)) } else { None }{% endif %}{% endif %}{% endif %}{% endif %},
             {%- endfor %}
         }
     }

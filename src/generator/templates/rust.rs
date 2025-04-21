@@ -20,6 +20,28 @@ pub const RUST_PRIMITIVE_TYPES: [&str; 13] = [
     "bool", "char", "f32", "f64", "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "String",
 ];
 
+// Any filter defined in the module `filters` is accessible in your template.
+mod filters {
+    use tracing_subscriber::fmt::format;
+
+    pub fn fix_member_name<T: std::fmt::Display>(s: T) -> askama::Result<String> {
+        let s = s.to_string();
+        Ok(s.replace(".", "_"))
+    }
+
+    // used to prefix models:: to a data_type
+    pub fn prefix_models<T: std::fmt::Display>(s: T) -> askama::Result<String> {
+        let s = s.to_string();
+        if !s.contains("::") {
+            return Ok(s);
+        }
+        if s.starts_with("models::") {
+            return Ok(s);
+        }
+        Ok(format!("models::{}", s))
+    }
+}
+
 #[derive(Template)]
 #[template(path = "rust/partial_header.j2", escape = "none")]
 pub struct PartialHeaderTemplateContext {
@@ -79,7 +101,6 @@ struct Operation {
     pub header_parameters: Vec<Field>,
     pub form_parameters: Vec<Field>,
     pub is_multipart: bool,
-    pub response_type: TypeDefinition,
     pub return_type: String,
     pub responses: Vec<Response>,
     pub auth_methods: Vec<AuthMethod>,
@@ -909,7 +930,6 @@ pub fn generate_clients(
                 path_parameters,
                 query_parameters,
                 body_parameters,
-                response_type: path.get_request_type().unwrap(),
                 return_type,
                 responses,
                 use_bon_builder: config.rust.use_bon_builder,
@@ -1106,6 +1126,8 @@ pub fn write_object_database(
 
     let chunks = object_database
         .iter()
+        .filter(|f| !f.value().name().to_lowercase().contains("superseded"))
+        .sorted_by(|a, b| Ord::cmp(&b.key(), &a.key()))
         .chunk_by(|f| extract_base_name(&f.key()));
 
     let mut grouped_objects: Vec<_> = chunks.into_iter().collect();
@@ -1120,10 +1142,6 @@ pub fn write_object_database(
         let mut items = group.map(|f| f.clone()).collect::<Vec<_>>();
         items.sort_by(|a, b| a.name().cmp(&b.name()));
 
-        let target_file = target_dir.join(format!(
-            "{}",
-            namespace.replace(".", "/").replace("::", "/")
-        ));
         let mut created_modules = vec![];
 
         let mut module_models = vec![];
@@ -1279,7 +1297,11 @@ pub fn write_object_database(
                 }
             }
 
-            let target_file = target_dir.join(format!("{}.rs", module_name.replace("::", "/")));
+            let mut target_file_namespace = module_name.replace("::", "/");
+            if !target_file_namespace.starts_with("models/") {
+                target_file_namespace = format!("models/{}", target_file_namespace);
+            }
+            let target_file = target_dir.join(format!("{}.rs", target_file_namespace));
 
             // let mods = all_imports.iter().cloned().collect::<Vec<String>>();
             // mods.sort();
@@ -1306,7 +1328,13 @@ pub fn write_object_database(
         };
         module_code.push_str(template.render().unwrap().as_str());
 
-        let target_file = target_dir.join(format!("{}/mod.rs", "models"));
+        let mod_base = if namespace.starts_with("models") {
+            "models"
+        } else {
+            &format!("models/{}", namespace.replace("::", "/"))
+        };
+
+        let target_file = target_dir.join(format!("{}/mod.rs", mod_base));
 
         // types.push_str(&codes.join("\n"));
         //     created_modules.push(module_name);
