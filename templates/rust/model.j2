@@ -1,4 +1,6 @@
 use crate::models;
+{%- for namespace in imports %}
+{{ namespace }}{% endfor %}
 use serde::{Deserialize, Serialize};
 {%- for model in models -%}
 {% if !model.is_enum && model.rust_has_byte_array -%}

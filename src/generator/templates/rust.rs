@@ -22,10 +22,16 @@ pub const RUST_PRIMITIVE_TYPES: [&str; 13] = [
 
 // Any filter defined in the module `filters` is accessible in your template.
 mod filters {
-    use tracing_subscriber::fmt::format;
 
     pub fn fix_member_name<T: std::fmt::Display>(s: T) -> askama::Result<String> {
-        let s = s.to_string();
+        let mut s = s.to_string();
+        if s.eq_ignore_ascii_case("type") {
+            s = String::from("r#type");
+        }
+        if s.chars().next().unwrap().is_numeric() {
+            s = format!("_{}", s);
+        }
+
         Ok(s.replace(".", "_"))
     }
 
@@ -265,6 +271,7 @@ pub struct Variable {
 #[derive(Template)]
 #[template(path = "rust/model.j2", escape = "none")]
 pub struct RustModelTemplate {
+    pub imports: Vec<String>,
     pub models: Vec<Model>,
 }
 
@@ -1105,6 +1112,28 @@ fn extract_base_name(name: &str) -> String {
     parts.iter().take(parts.len() - 1).join("::")
 }
 
+fn extract_models_level_use(info: &ModuleInfo) -> Option<String> {
+    if info.path.starts_with("serde") {
+        return None;
+    }
+    if info.path.starts_with("std") {
+        return Some(format!("use {};", info.path));
+    }
+    if info.path.starts_with("crate::") {
+        return Some(format!(
+            "use models::{};",
+            info.path.split("::").dropping(1).next().unwrap()
+        ));
+    }
+    if info.path.starts_with("models::") {
+        return Some(format!("use {};", info.path));
+    }
+    return Some(format!(
+        "use models::{};",
+        info.path.split("::").next().unwrap()
+    ));
+}
+
 pub fn write_object_database(
     output_dir: &PathBuf,
     object_database: &ObjectDatabase,
@@ -1135,16 +1164,15 @@ pub fn write_object_database(
     grouped_objects.sort_by(|a, b| a.0.cmp(&b.0));
 
     for (namespace, group) in grouped_objects {
-        let mut type_map: HashMap<String, (Vec<String>, Vec<String>)> =
-            std::collections::HashMap::new();
-        // let mut mods_map: HashMap<String, Vec<String>> = HashMap::new();
-
         let mut items = group.map(|f| f.clone()).collect::<Vec<_>>();
         items.sort_by(|a, b| a.name().cmp(&b.name()));
 
         let mut created_modules = vec![];
 
+        // list of all modules
         let mut module_models = vec![];
+        // list of all type definitions
+        let mut module_types: HashMap<String, (Vec<String>, Vec<String>)> = HashMap::new();
 
         for object_definition in items.iter() {
             let mut all_imports = HashSet::new();
@@ -1159,7 +1187,9 @@ pub fn write_object_database(
             match object_definition {
                 ObjectDefinition::Struct(struct_definition) => {
                     for module in struct_definition.get_required_modules() {
-                        all_imports.insert(module.to_use());
+                        if let Some(module) = extract_models_level_use(module) {
+                            all_imports.insert(module);
+                        }
                     }
                     let model = Model {
                         class_filename: class_filename.to_string(),
@@ -1209,12 +1239,21 @@ pub fn write_object_database(
                 }
                 ObjectDefinition::Enum(enum_definition) => {
                     for module in enum_definition.get_required_modules() {
-                        all_imports.insert(module.to_use());
+                        if let Some(module) = extract_models_level_use(module) {
+                            all_imports.insert(module);
+                        }
                     }
 
+                    let classname = enum_definition
+                        .name
+                        .clone()
+                        .split("::")
+                        .last()
+                        .unwrap()
+                        .to_owned();
                     let model = Model {
                         class_filename: class_filename.to_string(),
-                        classname: enum_definition.name.clone(),
+                        classname: classname.to_string(),
                         description: enum_definition
                             .description
                             .clone()
@@ -1230,7 +1269,7 @@ pub fn write_object_database(
                             .values
                             .into_iter()
                             .map(|(name, enum_value)| Variable {
-                                name: name.clone(),
+                                name: name.clone().split("::").last().unwrap_or(&name).to_string(),
                                 base_name: name.clone(),
                                 description: None,
                                 required: true,
@@ -1253,7 +1292,12 @@ pub fn write_object_database(
                                 .values
                                 .into_iter()
                                 .map(|(name, enum_value)| EnumVar {
-                                    name: name.clone(),
+                                    name: name
+                                        .clone()
+                                        .split("::")
+                                        .last()
+                                        .unwrap_or(&name)
+                                        .to_string(),
                                     value: enum_value.value_type.name.parse().unwrap_or_default(),
                                 })
                                 .collect(),
@@ -1265,8 +1309,8 @@ pub fn write_object_database(
                 ObjectDefinition::Primitive(primitive_definition) => {
                     let mut imports = vec![];
                     let mut codes = vec![];
-                    if type_map.contains_key(&namespace) {
-                        let (import, code) = type_map.get(&namespace).unwrap();
+                    if module_types.contains_key(&namespace) {
+                        let (import, code) = module_types.get(&namespace).unwrap();
                         imports = import.clone();
                         codes = code.clone();
                     }
@@ -1293,7 +1337,7 @@ pub fn write_object_database(
                     .unwrap();
 
                     codes.push(template);
-                    type_map.insert(namespace, (imports, codes));
+                    module_types.insert(namespace, (imports, codes));
                 }
             }
 
@@ -1303,6 +1347,9 @@ pub fn write_object_database(
             }
             let target_file = target_dir.join(format!("{}.rs", target_file_namespace));
 
+            if models.is_empty() {
+                continue;
+            }
             // let mods = all_imports.iter().cloned().collect::<Vec<String>>();
             // mods.sort();
             // we store module models
@@ -1311,7 +1358,10 @@ pub fn write_object_database(
             }
 
             let mut result = String::new();
-            let template = RustModelTemplate { models };
+            let template = RustModelTemplate {
+                imports: all_imports.iter().cloned().collect(),
+                models,
+            };
             result.push_str(&header);
             result.push_str("\n");
             result.push_str(template.render().unwrap().as_str());
@@ -1320,36 +1370,38 @@ pub fn write_object_database(
             created_modules.push(module_name);
         }
 
-        let mut module_code = String::new();
-        module_code.push_str(header);
-        module_code.push_str("\n");
-        let template = RustModelModuleTemplate {
-            models: module_models,
-        };
-        module_code.push_str(template.render().unwrap().as_str());
+        if !module_models.is_empty() || !module_types.is_empty() {
+            let mut module_code = String::new();
+            module_code.push_str(header);
+            module_code.push_str("\n");
+            let template = RustModelModuleTemplate {
+                models: module_models,
+            };
+            module_code.push_str(template.render().unwrap().as_str());
 
-        let mod_base = if namespace.starts_with("models") {
-            "models"
-        } else {
-            &format!("models/{}", namespace.replace("::", "/"))
-        };
+            let mod_base = if namespace.starts_with("models") {
+                "models"
+            } else {
+                &format!("models/{}", namespace.replace("::", "/"))
+            };
 
-        let target_file = target_dir.join(format!("{}/mod.rs", mod_base));
+            let target_file = target_dir.join(format!("{}/mod.rs", mod_base));
 
-        // types.push_str(&codes.join("\n"));
-        //     created_modules.push(module_name);
-        // }
-        // let mut imports = all_imports.iter().cloned().collect::<Vec<String>>();
-        // imports.sort();
-        // let mut result = imports.join("\n");
-        // result.push_str("\n");
-        // result.push_str(&types);
-        write_filename(&target_file, &module_code).unwrap();
-        // println!(
-        //     "Writing to {} \n{}",
-        //     target_file.to_str().unwrap(),
-        //     &module_code
-        // );
+            // types.push_str(&codes.join("\n"));
+            //     created_modules.push(module_name);
+            // }
+            // let mut imports = all_imports.iter().cloned().collect::<Vec<String>>();
+            // imports.sort();
+            // let mut result = imports.join("\n");
+            // result.push_str("\n");
+            // result.push_str(&types);
+            write_filename(&target_file, &module_code).unwrap();
+            // println!(
+            //     "Writing to {} \n{}",
+            //     target_file.to_str().unwrap(),
+            //     &module_code
+            // );
+        }
     }
 
     // let target_mod = target_dir.join("mod.rs");
