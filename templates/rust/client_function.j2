@@ -1,5 +1,5 @@
 {%- if description.len()>0 ~%}
-{{description}}
+{{description | rust_doc(0)}}
 {%~ endif -%}
 pub {{ name }}(&self{%- for prop in required_properties -%}, {{prop.name}}: {{prop.type_name}}{%- endfor -%}) -> builders::{{ builder_name }} {
   let mut builder = builders::{{ builder_name }}::default();

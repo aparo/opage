@@ -1,4 +1,4 @@
 {%- if description.len()>0 ~%}
-{{description}}
+{{description | rust_doc(0)}}
 {%~ endif -%}
 pub type {{ name }} = {{value}};

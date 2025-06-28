@@ -366,8 +366,8 @@ pub fn generate_operation(
 
         for (_, transfer_media_type) in &request_body.content {
             match transfer_media_type {
-                TransferMediaType::ApplicationJson(ref type_definition) => match type_definition {
-                    Some(ref type_definition) => {
+                TransferMediaType::ApplicationJson(type_definition) => match type_definition {
+                    Some(type_definition) => {
                         if let Some(ref module) = type_definition.module {
                             if !module_imports.contains(module) {
                                 module_imports.push(module.clone());

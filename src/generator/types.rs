@@ -391,20 +391,18 @@ impl PathDefinition {
         for (_, entity) in &self.response_entities {
             for (_, content) in &entity.content {
                 match content {
-                    TransferMediaType::ApplicationJson(ref type_definition) => {
-                        match type_definition {
-                            Some(type_definition) => match type_definition.module {
-                                Some(ref module_info) => {
-                                    if module_imports.contains(module_info) {
-                                        continue;
-                                    }
-                                    module_imports.push(module_info.clone());
+                    TransferMediaType::ApplicationJson(type_definition) => match type_definition {
+                        Some(type_definition) => match type_definition.module {
+                            Some(ref module_info) => {
+                                if module_imports.contains(module_info) {
+                                    continue;
                                 }
-                                _ => (),
-                            },
-                            None => (),
-                        }
-                    }
+                                module_imports.push(module_info.clone());
+                            }
+                            _ => (),
+                        },
+                        None => (),
+                    },
                     TransferMediaType::TextPlain => (),
                 }
             }
@@ -417,14 +415,12 @@ impl PathDefinition {
         for (_, entity) in &self.response_entities {
             for (_, content) in &entity.content {
                 match content {
-                    TransferMediaType::ApplicationJson(ref type_definition) => {
-                        match type_definition {
-                            Some(type_definition) => {
-                                response_type = Some(type_definition.clone());
-                            }
-                            None => (),
+                    TransferMediaType::ApplicationJson(type_definition) => match type_definition {
+                        Some(type_definition) => {
+                            response_type = Some(type_definition.clone());
                         }
-                    }
+                        None => (),
+                    },
                     TransferMediaType::TextPlain => (),
                 }
             }

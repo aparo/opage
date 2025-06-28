@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize, de::Error as OtherError};
 use crate::{apis::ResponseContent, models};
 use super::{Error, configuration};
 use crate::apis::ContentType;
-
+use crate::models::*;
 
 {% if mockall %}
 #[cfg_attr(feature = "mockall", automock)]
@@ -17,11 +17,11 @@ use crate::apis::ContentType;
 #[async_trait]
 pub trait {{ classname }}: Send + Sync {
 {% for operation in operations %}
+
     /// {{ operation.http_method }} {{ operation.path }}
     {%- if operation.description.len()>0 -%}
     ///
-    /// {{ operation.description }}
-    {%- endif %}
+{{ operation.description| rust_doc(2) }}{%- endif %}
     {% if operation.group_parameters -%}
     async fn {{ operation.operation_id }}(&self, params: {{ operation.operation_id_camel_case }}Params) -> Result<{% if operation.support_multiple_responses %}ResponseContent<{{ operation.operation_id_camel_case }}Success{% endif %}{% if operation.support_multiple_responses %}>{% endif %}{% if !operation.support_multiple_responses %}{{ operation.return_type }}{% endif %}, Error<{{ operation.operation_id_camel_case }}Error>>;
     {%- else -%}
@@ -49,7 +49,7 @@ impl {{ classname }}Client {
 {%- endif %}
 pub struct {{ operation.operation_id_camel_case }}Params {
     {%- for param in operation.all_parameters %}
-    {{ param.description }}
+    {{ param.description | rust_doc(1) }}
     pub {{ param.name|fix_member_name}}: {% if !param.required || param.is_nullable %}Option<{% endif %}{{ param.data_type }}{% if param.is_nullable || !param.required %}>{% endif %},
     {%- endfor %}
 }
@@ -61,8 +61,7 @@ impl {{ classname }} for {{ classname }}Client {
 {% for operation in operations %}
     {%- if operation.description.len()>0 -%}
     ///
-    /// {{ operation.description }}
-    {%- endif %}
+    {{ operation.description | rust_doc(1) }}{%- endif %}
     {%- if let Some(notes)=operation.notes -%}
     /// {{ notes }}
     {%- endif -%}

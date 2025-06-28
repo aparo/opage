@@ -2,12 +2,13 @@ use std::collections::HashMap;
 
 use convert_case::Casing;
 use oas3::{
-    spec::{Operation, ParameterIn},
     Spec,
+    spec::{Operation, ParameterIn},
 };
 use tracing::trace;
 
 use crate::{
+    GeneratorError,
     generator::{
         component::{
             object_definition::oas3_type_to_string, type_definition::get_type_from_schema,
@@ -20,7 +21,6 @@ use crate::{
         },
     },
     utils::{config::Config, name_mapping::NameMapping},
-    GeneratorError,
 };
 
 use super::utils::{generate_request_body_entity, generate_responses, is_path_parameter};
@@ -50,7 +50,7 @@ pub fn generate_operation(
             return Err(GeneratorError::MissingIdError(
                 "operation_id".to_string(),
                 path.to_owned(),
-            ))
+            ));
         }
     };
 
@@ -133,7 +133,7 @@ pub fn generate_operation(
                     return Err(GeneratorError::CodeGenerationError(
                         "request body".to_string(),
                         err.to_string(),
-                    ))
+                    ));
                 }
             }
         }
@@ -155,7 +155,7 @@ pub fn generate_operation(
                     return Err(GeneratorError::CodeGenerationError(
                         "request body".to_string(),
                         err.to_string(),
-                    ))
+                    ));
                 }
             }
         }
@@ -163,9 +163,19 @@ pub fn generate_operation(
     };
 
     trace!("Generating source code");
+    // Generate multi request type functions
+    let mut name = function_name.clone();
+    let mut package = String::new();
+    if name.contains(".") {
+        let parts: Vec<&str> = name.split('.').collect();
+        package = parts[..parts.len() - 1].join(".");
+        name = parts.last().unwrap().to_string();
+    }
+
     // function
     let path_definition = PathDefinition {
-        name: function_name.clone(),
+        name,
+        package,
         url: path.to_owned(),
         method: method.to_owned(),
         response_entities,
@@ -332,7 +342,7 @@ fn generate_query_parameter_code(
                 return Err(GeneratorError::ParameterError(
                     "Failed to resolve parameter".to_owned(),
                     err.to_string(),
-                ))
+                ));
             }
         };
         if parameter.location != ParameterIn::Query {
@@ -354,14 +364,14 @@ fn generate_query_parameter_code(
                     return Err(GeneratorError::ParameterError(
                         format!("Failed to resolve parameter {}", parameter.name),
                         err.to_string(),
-                    ))
+                    ));
                 }
             },
             None => {
                 return Err(GeneratorError::ParameterError(
                     "Parameter has no schema:".to_string(),
                     parameter.name,
-                ))
+                ));
             }
         };
 
@@ -507,22 +517,20 @@ fn generate_multi_request_type_functions(
         let request_content_variable_name =
             name_mapping.name_to_property_name(definition_path, "content");
         match transfer_media_type {
-            TransferMediaType::ApplicationJson(ref type_definition_opt) => {
-                match type_definition_opt {
-                    Some(ref type_definition) => {
-                        if let Some(ref module) = type_definition.module {
-                            if !module_imports.contains(module) {
-                                module_imports.push(module.clone());
-                            }
+            TransferMediaType::ApplicationJson(type_definition_opt) => match type_definition_opt {
+                Some(type_definition) => {
+                    if let Some(ref module) = type_definition.module {
+                        if !module_imports.contains(module) {
+                            module_imports.push(module.clone());
                         }
-                        function_parameters.push(format!(
-                            "{}: {}",
-                            request_content_variable_name, type_definition.name
-                        ))
                     }
-                    None => trace!("Empty request body not added to function params"),
+                    function_parameters.push(format!(
+                        "{}: {}",
+                        request_content_variable_name, type_definition.name
+                    ))
                 }
-            }
+                None => trace!("Empty request body not added to function params"),
+            },
             TransferMediaType::TextPlain => function_parameters.push(format!(
                 "{}: &{}",
                 request_content_variable_name,
@@ -594,9 +602,12 @@ fn generate_multi_request_type_functions(
         );
         request_source_code += "}\n";
 
+        let package = name_mapping.extract_package_name(&content_function_name);
+        let name = name_mapping.extract_struct_name(&content_function_name);
+
         let _ = PathDefinition {
-            package: name_mapping.extract_package_name(&content_function_name),
-            name: name_mapping.extract_struct_name(&content_function_name),
+            package,
+            name,
             used_modules: module_imports.clone(),
             ..Default::default()
         };

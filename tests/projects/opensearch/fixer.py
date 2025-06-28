@@ -51,10 +51,10 @@ def flatten_query_parameters(input_file, output_file):
             if operationId in ["bulk.2", "bulk.3"]:
                 paths[path].pop(method)
                 continue
-            if operationId.starts_with("cat.") and operationId.starts_with(".1"):
+            if operationId.startswith("cat.") and operationId.startswith(".1"):
                 paths[path].pop(method)
                 continue
-            if operationId.starts_with(".0"):
+            if operationId.startswith(".0"):
                 paths[path][method]["operationId"] = operationId[:-2]
                 continue
 
@@ -64,7 +64,7 @@ def flatten_query_parameters(input_file, output_file):
 
 
 def cook_operation(path: str, operationId: str) -> str:
-    if operationId.starts_with(".0"):
+    if operationId.startswith(".0"):
         operationId = operationId[:-2]
 
     return operationId

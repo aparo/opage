@@ -1,3 +1,4 @@
+use crate::GeneratorError;
 use crate::generator::component::object_definition::get_object_name;
 use crate::generator::types::{
     ModuleInfo, ObjectDatabase, ObjectDefinition, PathDatabase, PathDefinition, PropertyDefinition,
@@ -7,8 +8,7 @@ use crate::utils::config::Config;
 use crate::utils::file::write_filename;
 use crate::utils::name_mapping::convert_name;
 use crate::utils::string::capitalize;
-use crate::GeneratorError;
-use askama::Template;
+use askama::{Template, Values};
 use convert_case::Casing;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -23,7 +23,10 @@ pub const RUST_PRIMITIVE_TYPES: [&str; 13] = [
 // Any filter defined in the module `filters` is accessible in your template.
 mod filters {
 
-    pub fn fix_member_name<T: std::fmt::Display>(s: T) -> askama::Result<String> {
+    pub fn fix_member_name<T: std::fmt::Display>(
+        s: T,
+        _: &dyn askama::Values,
+    ) -> askama::Result<String> {
         let mut s = s.to_string();
         if s.eq_ignore_ascii_case("type") {
             s = String::from("r#type");
@@ -36,7 +39,10 @@ mod filters {
     }
 
     // used to prefix models:: to a data_type
-    pub fn prefix_models<T: std::fmt::Display>(s: T) -> askama::Result<String> {
+    pub fn prefix_models<T: std::fmt::Display>(
+        s: T,
+        _: &dyn askama::Values,
+    ) -> askama::Result<String> {
         let s = s.to_string();
         if !s.contains("::") {
             return Ok(s);
@@ -46,7 +52,51 @@ mod filters {
         }
         Ok(format!("models::{}", s))
     }
+
+    // used to print the to documentation
+    pub fn rust_doc<T: std::fmt::Display>(
+        s: T,
+        _: &dyn askama::Values,
+        depth: usize,
+    ) -> askama::Result<String> {
+        let s = s.to_string();
+        if s.is_empty() {
+            return Ok("".to_string());
+        }
+        let lines = s
+            .lines()
+            .map(|line| {
+                let mut result = String::new();
+                for _ in 0..depth {
+                    result.push_str("  ");
+                }
+                result.push_str("/// ");
+                result.push_str(line);
+                result.push('\n');
+                result
+            })
+            .collect::<String>();
+
+        Ok(lines.trim_ascii_end().to_owned())
+    }
 }
+
+// pub fn fix_rust_description(ident: &str, description: &str) -> String {
+//     if description.is_empty() {
+//         return "".to_string();
+//     }
+//     let result = description
+//         .lines()
+//         .map(|line| format!("{}/// {}\n", ident, line))
+//         .collect::<String>()
+//         .trim()
+//         .to_string();
+//     if result.starts_with("///") {
+//         return result;
+//     } else {
+//         return format!("/// {}", result);
+//     }
+// }
 
 #[derive(Template)]
 #[template(path = "rust/partial_header.j2", escape = "none")]
@@ -144,6 +194,7 @@ impl Operation {
 #[derive(Template)]
 #[template(path = "rust/api.j2", escape = "none")]
 pub struct ApiTemplateContext {
+    pub namespace: String,
     pub classname: String,
     pub mockall: bool,
     pub operations: Vec<Operation>,
@@ -566,7 +617,7 @@ pub fn generate_rust_client_code(
 
         let function = RustClientFunctionTemplate {
             name: &path.name,
-            description: fix_rust_description("", &description),
+            description: description,
             required_properties,
             builder_name: builder_name.clone(),
         };
@@ -597,7 +648,7 @@ pub fn generate_rust_client_code(
         description.push_str("- `client`: The client used to send the request\n");
         fields.push(Field {
             annotations: vec![], //"#[builder(setter)]".to_string()
-            description: fix_rust_description("", "The client used to send the request"),
+            description: "The client used to send the request".to_owned(),
             modifier: "pub".to_string(),
             name: "client".to_string(),
             base_name: "client".to_string(),
@@ -631,13 +682,10 @@ pub fn generate_rust_client_code(
                 // }
                 let field = Field {
                     annotations,
-                    description: fix_rust_description(
-                        "",
-                        &property
-                            .description
-                            .clone()
-                            .unwrap_or(String::from("No description available")),
-                    ),
+                    description: property
+                        .description
+                        .clone()
+                        .unwrap_or(String::from("No description available")),
                     modifier: "pub".to_string(),
                     name: property.name.clone(),
                     base_name: property.real_name.clone(),
@@ -662,7 +710,7 @@ pub fn generate_rust_client_code(
         let builder_template = RustBuilderStructTemplate {
             imports: builder_imports.clone(),
             derivations: vec!["Builder", "Debug", "Default"],
-            description: &fix_rust_description("", &description),
+            description: &description,
             name: &convert_name(&path.name),
             builder_name: &builder_name,
             response_type: &response_type,
@@ -702,13 +750,10 @@ pub fn generate_rust_client_code(
 fn property_definition_to_field(property: &PropertyDefinition) -> Field {
     Field {
         annotations: vec![],
-        description: fix_rust_description(
-            "",
-            &property
-                .description
-                .clone()
-                .unwrap_or(String::from("No description available")),
-        ),
+        description: property
+            .description
+            .clone()
+            .unwrap_or(String::from("No description available")),
         modifier: "pub".to_string(),
         name: property.name.clone(),
         base_name: property.real_name.clone(),
@@ -731,23 +776,6 @@ pub fn fix_type_name_property(property: &str) -> String {
         return format!("crate::{}", property);
     }
     return property.to_string();
-}
-
-pub fn fix_rust_description(ident: &str, description: &str) -> String {
-    if description.is_empty() {
-        return "".to_string();
-    }
-    let result = description
-        .lines()
-        .map(|line| format!("{}/// {}\n", ident, line))
-        .collect::<String>()
-        .trim()
-        .to_string();
-    if result.starts_with("///") {
-        return result;
-    } else {
-        return format!("/// {}", result);
-    }
 }
 
 pub fn extract_default_rust_response_type(optional_response: Option<TypeDefinition>) -> String {
@@ -775,10 +803,7 @@ pub fn extract_body_field_type(path: &PathDefinition) -> Option<Field> {
                     .to_owned();
                 return Some(Field {
                     annotations: vec![],
-                    description: fix_rust_description(
-                        "",
-                        &struct_definition.description.clone().unwrap_or_default(),
-                    ),
+                    description: struct_definition.description.clone().unwrap_or_default(),
                     modifier: "pub".to_owned(),
                     base_name: name.clone(),
                     name: name,
@@ -806,10 +831,10 @@ pub fn build_responses(path: &PathDefinition) -> Vec<Response> {
                 match entity.content.get(&first_key).unwrap() {
                     TransferMediaType::ApplicationJson(object) => match object {
                         Some(typ) => {
-                            if typ.name.starts_with("crate::") {
+                            if typ.name.starts_with("crate::") || typ.name.starts_with("Vec<") {
                                 typ.name.clone()
                             } else {
-                                format!("crate::{}", typ.name)
+                                format!("crate::models::{}", typ.name)
                             }
                         }
                         _ => "serde_json::Value".to_string(),
@@ -832,6 +857,13 @@ pub fn build_responses(path: &PathDefinition) -> Vec<Response> {
         .collect()
 }
 
+fn extract_namespace_key(name: &str, path: &PathDefinition) -> String {
+    if path.package.is_empty() {
+        return "api".to_owned();
+    }
+    path.package.clone()
+}
+
 pub fn generate_clients(
     output_dir: &PathBuf,
     path_database: &PathDatabase,
@@ -845,7 +877,10 @@ pub fn generate_clients(
     }
     let header = &render_partial_header(config);
 
-    let chunks = path_database.iter().chunk_by(|f| f.value().package.clone());
+    let chunks = path_database
+        .iter()
+        .sorted_by(|a, b| a.value().package.cmp(&b.value().package))
+        .chunk_by(|f| extract_namespace_key(f.key(), f.value()));
 
     let mut grouped_paths: Vec<_> = chunks.into_iter().collect();
 
@@ -919,10 +954,11 @@ pub fn generate_clients(
                         return_type = r.data_type.clone();
                     });
             }
+            let operation_id = path.name.to_owned();
 
             let operation = Operation {
-                operation_id: id.to_owned(),
-                operation_id_camel_case: capitalize(&id.to_case(convert_case::Case::Camel)),
+                operation_id,
+                operation_id_camel_case: capitalize(&path.name.to_case(convert_case::Case::Camel)),
                 path: path.url.clone(),
                 http_method: path.method.to_string(),
                 description: path.description.clone(),
@@ -950,10 +986,17 @@ pub fn generate_clients(
         // we add headers
         final_client_code.push_str(header);
         final_client_code.push_str("\n");
-        let classname = config.project_metadata.client_name.clone();
+        let mut classname = config.project_metadata.client_name.clone();
+        if !namespace.is_empty() {
+            classname = format!(
+                "{}Api",
+                capitalize(&namespace.to_case(convert_case::Case::Camel))
+            );
+        }
 
         // we add the client code
         let api_template = ApiTemplateContext {
+            namespace: namespace.clone(),
             classname: classname.clone(),
             mockall: config.rust.mockall,
             operations,
@@ -1194,10 +1237,7 @@ pub fn write_object_database(
                     let model = Model {
                         class_filename: class_filename.to_string(),
                         classname: struct_definition.name.clone(),
-                        description: struct_definition
-                            .description
-                            .clone()
-                            .map(|d| fix_rust_description("    ", &d)),
+                        description: struct_definition.description.clone(),
                         is_enum: false,
                         is_integer: false,
                         rust_has_byte_array: struct_definition
@@ -1214,10 +1254,7 @@ pub fn write_object_database(
                             .map(|(_, prop)| Variable {
                                 name: prop.name.clone(),
                                 base_name: prop.real_name.clone(),
-                                description: prop
-                                    .description
-                                    .clone()
-                                    .map(|d| fix_rust_description("    ", &d)),
+                                description: prop.description.clone(),
                                 required: prop.required,
                                 is_nullable: !prop.required,
                                 is_enum: false,
@@ -1254,10 +1291,7 @@ pub fn write_object_database(
                     let model = Model {
                         class_filename: class_filename.to_string(),
                         classname: classname.to_string(),
-                        description: enum_definition
-                            .description
-                            .clone()
-                            .map(|d| fix_rust_description("    ", &d)),
+                        description: enum_definition.description.clone(),
                         is_enum: true,
                         is_integer: false,
                         rust_has_byte_array: false,
@@ -1319,17 +1353,14 @@ pub fn write_object_database(
                         imports.push(module.to_use());
                     }
 
-                    let description = fix_rust_description(
-                        "",
-                        &primitive_definition
-                            .description
-                            .as_ref()
-                            .map_or("", |d| d.as_str()),
-                    );
+                    let description = &primitive_definition
+                        .description
+                        .as_ref()
+                        .map_or("", |d| d.as_str());
 
                     let template = RustTypeTemplate {
                         name: extract_rust_name(&primitive_definition.name).as_str(),
-                        description: description.as_str(),
+                        description: description,
                         value: extract_rust_name(&primitive_definition.primitive_type.name)
                             .as_str(),
                     }
@@ -1455,13 +1486,10 @@ pub fn render_struct_definition(
     serializable: bool,
     config: &Config,
 ) -> String {
-    let description = fix_rust_description(
-        "",
-        &struct_definition
-            .description
-            .as_ref()
-            .map_or("", |d| d.as_str()),
-    );
+    let description = &struct_definition
+        .description
+        .as_ref()
+        .map_or("", |d| d.as_str());
     let mut derivations = vec!["Debug", "Clone", "PartialEq"];
     if serializable {
         derivations.push("Serialize");
@@ -1480,10 +1508,7 @@ pub fn render_struct_definition(
         {
             serde_parts.insert(format!("alias = \"{}\"", property.real_name));
         }
-        let field_description = fix_rust_description(
-            "  ",
-            &property.description.as_ref().map_or("", |d| d.as_str()),
-        );
+        let field_description = property.description.as_ref().map_or("", |d| d.as_str());
 
         if property.type_name.starts_with("Vec<") {
             serde_parts.insert("default".to_string());
@@ -1516,7 +1541,7 @@ pub fn render_struct_definition(
             }
             fields.push(Field {
                 annotations,
-                description: field_description,
+                description: field_description.to_owned(),
                 modifier: "pub".to_string(),
                 name: extract_rust_name(&property.name),
                 base_name: property.real_name.clone(),
@@ -1535,7 +1560,7 @@ pub fn render_struct_definition(
             let name = extract_rust_name(&property.name);
             fields.push(Field {
                 annotations,
-                description: field_description,
+                description: field_description.to_owned(),
                 modifier: "pub".to_string(),
                 name,
                 base_name: property.real_name.clone(),
@@ -1550,7 +1575,7 @@ pub fn render_struct_definition(
     fields.sort();
     let template = RustStructTemplate {
         name: extract_rust_name(&struct_definition.name).as_str(),
-        description: description.as_str(),
+        description: description,
         derivations,
         fields,
         imports: struct_definition
@@ -1573,13 +1598,10 @@ pub fn render_enum_definition(
     serializable: bool,
 ) -> String {
     // let mut definition_str = String::new();
-    let description = fix_rust_description(
-        "",
-        &enum_definition
-            .description
-            .as_ref()
-            .map_or("", |d| d.as_str()),
-    );
+    let description = enum_definition
+        .description
+        .as_ref()
+        .map_or("", |d| d.as_str());
     let variants = enum_definition
         .values
         .iter()
@@ -1600,7 +1622,7 @@ pub fn render_enum_definition(
 
     let template = RustEnumTemplate {
         name: extract_rust_name(&enum_definition.name).as_str(),
-        description: description.as_str(),
+        description: description,
         derivations,
         variants: variants,
         imports: enum_definition

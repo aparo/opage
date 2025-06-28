@@ -1,5 +1,5 @@
 {%- if description.len()>0 ~%}
-{{description}}
+{{description | rust_doc(0)}}
 {%- endif %}
 {%- if derivations.len()>0 ~%}
 #[derive({% for i in derivations %}{{ i }}, {% endfor %})]
@@ -7,7 +7,7 @@
 pub struct {{ name }} {
 {%- for field in fields %}
 {% if field.description.len()>0 +%}
-    {{field.description}}{% endif %}
+{{field.description | rust_doc(1)}}{% endif %}
 {%- if field.annotations.len()>0 %}
     {% for i in field.annotations %}{{ i }}{% endfor -%}
 {%- endif %}

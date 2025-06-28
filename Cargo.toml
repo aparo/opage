@@ -1,19 +1,19 @@
 [package]
 name = "opage"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-clap = { version = "4.5.35", features = ["derive"] }
+clap = { version = "4.5.40", features = ["derive"] }
 convert_case = "0.8.0"
 tracing = "*"
 tracing-subscriber = "*"
-reqwest = "0.12.15"
+reqwest = "0.12.20"
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.133"
-serde-aux = "4.6.0"
+serde_json = "1.0.140"
+serde-aux = "4.7.0"
 oas3 = { path = "oas3-rs/crates/oas3" }
-askama = "0.13.0"
+askama = "0.14.0"
 derive_builder = "0.20.2"
 embed-file = "0.2.0"
 thiserror = "2.0.12"
